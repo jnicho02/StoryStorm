@@ -66,7 +66,13 @@ class PhotosController < ApplicationController
       params.require(:photo).permit(
         :shot,
         :url,
-        :plaque_id
+        :plaque_id,
+        :of_a_plaque,
+        :file_url,
+        :photographer,
+        :photographer_url,
+        :licence_id,
+        :person_id
       )
 	end
 end
