@@ -379,7 +379,7 @@ class Person < ActiveRecord::Base
   end
     
   def uri
-    "http://openplaques.org" + Rails.application.routes.url_helpers.person_path(self, :format => :json)
+    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.person_path(self, :format => :json)
   end
     
   def to_s

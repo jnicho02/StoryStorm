@@ -170,7 +170,7 @@ class Role < ActiveRecord::Base
   end
   
   def uri
-    "http://openplaques.org" + Rails.application.routes.url_helpers.role_path(self.slug, :format => :json)
+    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.role_path(self.slug, :format => :json)
   end
 
   def to_s

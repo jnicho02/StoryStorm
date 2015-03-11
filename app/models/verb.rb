@@ -29,7 +29,7 @@ class Verb < ActiveRecord::Base
   end
 
   def uri
-    "http://openplaques.org" + Rails.application.routes.url_helpers.verb_path(self, :format => :json)
+    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.verb_path(self, :format => :json)
   end
 
   def as_json(options={})

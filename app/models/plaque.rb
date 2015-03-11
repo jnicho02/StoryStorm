@@ -277,7 +277,7 @@ class Plaque < ActiveRecord::Base
   end
 
   def machine_tag
-    "openplaques:id=" + id.to_s
+    "storystorm:id=" + id.to_s
   end
 
   def title
@@ -370,7 +370,7 @@ class Plaque < ActiveRecord::Base
   end
 
   def uri
-    "http://openplaques.org" + Rails.application.routes.url_helpers.plaque_path(self, :format => :json) if id
+    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.plaque_path(self, :format => :json) if id
   end
 
   def to_s

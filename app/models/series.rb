@@ -30,7 +30,7 @@ class Series < ActiveRecord::Base
   end
 
   def uri
-    "http://openplaques.org" + Rails.application.routes.url_helpers.series_path(self.id, :format=>:json) if id
+    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.series_path(self.id, :format=>:json) if id
   end
 
   def as_json(options={})
