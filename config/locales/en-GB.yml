@@ -4,10 +4,12 @@
 en-GB:
   home:
     index:
-      page_title: Open Plaques - linking historical people and places
-      strapline_html: Documenting the historical links between <strong>people</strong> and <strong>places</strong>, as recorded by commemorative <strong>plaques</strong>.
+      page_title: Storystorm Open Plaques Takeover - co-created open future plaques
+      strapline_html: Co-creating an open future, recorded on blue plaques
       explore: Explore
       contribute: Contribute
+      contribute2: Take a photo. Add it to Flickr or Wikimedia Commons and link it to our record
+      contribute3: Spot an innaccuracy. Tell us.
       news: News
       plaque_of_the_day: Plaque of the day
 
