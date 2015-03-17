@@ -13,6 +13,14 @@ en-GB:
       news: News
       plaque_of_the_day: Plaque of the day
 
+  plaques:
+    new:
+      page_title: Storystorm - new plaque
+      page_heading: Tell us about your plaque of the future
+      thanks: Thanks for identifying a plaque that is not already on this website. Fill in as much as you can and anything you don't know can be left blank.
+      you_agree_to_open_licence: All of the data on Storystorm is released into the public domain completely licence-free. By providing us with information you are agreeing that it will be public domain also.
+      error: There was an error adding your plaque. Please correct it below.
+
   # Used in array.to_sentence.
   support:
     array:
