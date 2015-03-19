@@ -5,41 +5,38 @@
 <% end %>
 
 <div class="panel clearfix">
-
   <div id="homepage_content">
-
     <p class="intro"><%= t '.strapline_html' %></p>
-
     <ul id="homepage_modules">
       <li>
-        <h2><%=t :explore %></h2>
+        <h2><%=t '.explore' %></h2>
         <p>Browse the <%= @plaques_count %> plaques by <%= link_to "person", people_path %>, <%= link_to "place", countries_path %>, or <%= link_to "search", search_path %>.</p>
       </li>
       <li>
         <h2><%=t '.contribute' %></h2>
-        <p>Spot a plaque. Help us by <%= link_to "adding it", new_plaque_path %> to the site.</p>
-        <p><%=t '.contribute2' %></p>
-        <p><%=t '.contribute3' %></p>
-        <p>You are all part of our mission to find all of the plaques in the world!</p>
+        <p><%=t '.contribute1' %> <%= link_to t('.add_a_plaque'), new_plaque_path %></p>
+        <p><%=t '.take_a_photo' %></p>
+        <p><%=t '.spot_an_innaccuracy' %></p>
+        <p><%=t '.mission' %></p>
       </li>
       <li>
-        <h2><%=t :news %></h2>
-        <p>Subscribe to <a href="http://blog.openplaques.org">our blog</a>, follow us on <a href="http://www.twitter.com/openplaques">Twitter</a> for updates.</p>
+        <h2><%=t '.news' %></h2>
+        <p><%=t '.news_detail_html' %></p>
         <div class="like_button">
-          <iframe src="http://www.facebook.com/plugins/like.php?href=https://www.facebook.com/OpenPlaques&amp;layout=button_count&amp;show_faces=false&amp;width=90&amp;action=like&amp;font&amp;colorscheme=light&amp;height=35" scrolling="no" frameborder="0" style="border:none; overflow:hidden; width:75px; height:20px; text-align:right;" allowTransparency="true"></iframe> us on Facebook for features and trivia.
+          <iframe src="http://www.facebook.com/plugins/like.php?href=https://www.facebook.com/OpenPlaques&amp;layout=button_count&amp;show_faces=false&amp;width=90&amp;action=like&amp;font&amp;colorscheme=light&amp;height=35" scrolling="no" frameborder="0" style="border:none; overflow:hidden; width:75px; height:20px; text-align:right;" allowTransparency="true"></iframe>
+          <%= t '.like_us_on_Facebook' %>
         </div>
       </li>
       <% if @todays %>
-      <li id="plaque_of_the_day">
-        <h2><%= t :plaque_of_the_day %> from <%= link_to "our favourites", picks_path %></h2>
-        <div>
-          <div class="thumb">
-            <%= link_to thumbnail_img(@todays.plaque), @todays.plaque %>
+        <li id="plaque_of_the_day">
+          <h2><%= t '.plaque_of_the_day' %></h2>
+          <div>
+            <div class="thumb">
+              <%= link_to thumbnail_img(@todays.plaque), @todays.plaque %>
+            </div>
+            <div><%= link_to @todays.plaque.title, @todays.plaque %><br/>"<%= @todays.description %>" - <%= @todays.proposer %></div>
           </div>
-          <div><%= link_to @todays.plaque.title, @todays.plaque %><br/>"<%= @todays.description %>" - <%= @todays.proposer %></div>
-        </div>
-        <p></p>
-      </li>
+        </li>
       <% end %>
     </ul>
 

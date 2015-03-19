@@ -8,9 +8,16 @@ en-GB:
       strapline_html: Co-creating an open future, recorded on blue plaques
       explore: Explore
       contribute: Contribute
-      contribute2: Take a photo. Add it to Flickr or Wikimedia Commons and link it to our record
-      contribute3: Spot an innaccuracy. Tell us.
+      contribute1: Want to write the future? Anyone can help us and 
+      add_a_plaque: add a plaque
+      take_a_photo: Seen a Storystorm plaque? Take a photo of it. Add it to Wikimedia Commons or Flickr and link it to our record
+      spot_an_innaccuracy: Spot an innaccuracy. Tell us.
+      find_something: Or find something 
+      to_do: to do
+      mission: You are all part of our mission to find all of the plaques in the world!
       news: News
+      news_detail_html: Subscribe to <a href="http://blog.openplaques.org">our blog</a>, follow us on <a href="http://www.twitter.com/openplaques">Twitter</a> for updates.
+      like_us_on_Facebook: us on Facebook for features and trivia.
       plaque_of_the_day: Plaque of the day
 
   plaques:
