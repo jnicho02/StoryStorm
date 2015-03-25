@@ -41,7 +41,7 @@
 
     <%= simple_format(@person.introduction) if @person.introduction %>
 
-    <%= content_tag("p", "Read more on ".html_safe + link_to("Wikipedia", @person.default_wikipedia_url, :target => '_blank')) unless @person.default_wikipedia_url.blank? %>
+    <%#= content_tag("p", "Read more on ".html_safe + link_to("Wikipedia", @person.default_wikipedia_url, :target => '_blank')) unless @person.default_wikipedia_url.blank? %>
 
     <% if @person.uniq_plaques.size > 0 %>
       <h2>Commemorated on <%= @person.uniq_plaques.size %> <%= 'plaque'.pluralize @person.uniq_plaques.size %></h2>
