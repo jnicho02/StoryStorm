@@ -139,8 +139,8 @@ class Person < ActiveRecord::Base
 
   def age
     return died_in - born_in if died_in && born_in
-    return Time.now.year - born_in if born_in && thing?
-    return Time.now.year - born_in if born_in && born_in > 1900
+    return 2030 - born_in if born_in && thing?
+    return 2030 - born_in if born_in && born_in > 1900
     "unknown"
    end
 
