@@ -61,7 +61,7 @@ module PlaquesHelper
 #    key = FLICKR_KEY # "86c115028094a06ed5cd19cfe72e8f8b"
     key = "86c115028094a06ed5cd19cfe72e8f8b"
     content_type = "1" # Photos only
-    machine_tag_key = "openplaques:id=".to_s
+    machine_tag_key = "storystorm:id=".to_s
     repeat = 20 # 100 per page, we will check the 2000 most recently created Flickr images
     if (plaque)
       machine_tag_key += plaque.id.to_s
@@ -98,7 +98,7 @@ module PlaquesHelper
         if @photo
           # we've already got that one
         else
-          plaque_id = photo.attributes["machine_tags"][/openplaques\:id\=(\d+)/, 1]
+          plaque_id = photo.attributes["machine_tags"][/storystorm\:id\=(\d+)/, 1]
 
           puts "Flickr: photo of plaque " + plaque_id.to_s + " '" + photo.attributes["title"] + "'"
 
