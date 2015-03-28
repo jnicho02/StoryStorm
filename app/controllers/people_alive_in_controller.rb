@@ -8,7 +8,7 @@ class PeopleAliveInController < ApplicationController
     year = params[:id].to_i
     raise ActiveRecord::RecordNotFound if year.blank?
     raise ActiveRecord::RecordNotFound if year < 1000
-    raise ActiveRecord::RecordNotFound if year > Date.today.year
+    raise ActiveRecord::RecordNotFound if year > 2030
 
     @year = Date.parse(year.to_s + "-01-01")
     @subjects = Person
