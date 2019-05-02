@@ -1,4 +1,4 @@
-class ChangeLatLongToFloats < ActiveRecord::Migration
+class ChangeLatLongToFloats < ActiveRecord::Migration[4.2]
   def self.up
     if ActiveRecord::Base.connection.adapter_name == 'PostgreSQL'
 
@@ -11,8 +11,8 @@ class ChangeLatLongToFloats < ActiveRecord::Migration
       add_column :plaques, :longitude, :float
 
     else
-      change_column :plaques, :latitude, :float, :null => true
-      change_column :plaques, :longitude, :float, :null => true
+      change_column :plaques, :latitude, :float, null: true
+      change_column :plaques, :longitude, :float, null: true
     end
   end
 

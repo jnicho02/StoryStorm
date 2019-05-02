@@ -1,15 +1,20 @@
-<% content_for :page_title, @page.name %>
+<% content_for(:page_title) {t '.page_title', page: @page.name} %>
+<% content_for(:title) {nil} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.edit'), edit_page_path(@page.slug)} %>
 
-<% if current_user && current_user.is_admin? %>
-  <section class="admin_panel">
-    <%= link_to("Edit this page", edit_page_path(@page.slug), {:class => :edit, :title => "Edit this page"})%>
-  </section>
-<% end %>
-
-<div class="panel clearfix">
-  <h1><%= @page.name %></h1>
+<div class="row">
+	<div class="col-xs-0 col-sm-2 col-md-2"></div>
+	<div class="col-xs-12 col-sm-8 col-md-8">
+    <h1 class="blog-title"><%= @page.name %></h1>
+    <p class="lead blog-description"><%= @page.strapline %></p>
+  </div>
+  <div class="col-xs-0 col-sm-2 col-md-2"></div>
 </div>
 
-<div class="body">
-  <%= simple_format(@page.body) %>
+<div class="row">
+	<div class="col-xs-0 col-sm-2 col-md-2"></div>
+	<div class="col-xs-12 col-sm-8 col-md-8">
+    <%= markdown(@page.body) %>
+  </div>
+  <div class="col-xs-0 col-sm-2 col-md-2"></div>
 </div>

@@ -1,14 +1,9 @@
-<% content_for :page_title, "Historical plaques - by series" %>
-<div class="panel">
-  <% if current_user %>
-    <section class="admin_panel">
-      <%= link_to("Add new series", new_series_path, {:class => :edit, :title => "Add new series"})%>
-    </section>
-  <% end %>
-  <h1>Plaque series</h1>
-  <p>Plaques are issued by numerous organisations, and sometimes they are also part of a special set or series.
-  We endeavour to identify the series and also the series identifier</p>
-  <%= render @series %>
-</div>
+<% content_for(:page_title) {t '.page_title'} %>
+<% content_for(:title) {t '.page_heading'} %>
+<% content_for(:page_subhead) do %>
+  <p><%= t '.explanation' %></p>
+  <span class="badge badge-secondary pull-right"><%= @series.count %></span>
+<% end %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.add'), new_series_path} %>
 
-<p class="alternate_formats">Data about series as <%= alternate_link_to "JSON", series_path(:json), :json %></p>
+<%= render partial: 'series/row', collection: @series, as: :series %>

@@ -1,10 +1,8 @@
 class PagesController < ApplicationController
 
-  before_filter :authenticate_admin!, :only => :destroy
-  before_filter :authenticate_user!, :except => [:show]
-
-  before_filter :find_page, :only => [:show, :edit, :update]
-
+  before_action :authenticate_admin!, only: :destroy
+  before_action :authenticate_user!, except: [:show]
+  before_action :find, only: [:show, :edit, :update]
   respond_to :html, :json
 
   def about
@@ -12,7 +10,7 @@ class PagesController < ApplicationController
   end
 
   def show
-    respond_with(@page)
+    respond_with @page
   end
 
   def index
@@ -25,22 +23,20 @@ class PagesController < ApplicationController
 
   def create
     @page = Page.new(page_params)
-
     if @page.save
       redirect_to pages_path
     end
-
   end
 
   def update
     if @page.update_attributes(page_params)
-      redirect_to :action => :show, :id => @page.slug
+      redirect_to action: :show, id: @page.slug
     end
   end
 
   protected
 
-    def find_page
+    def find
       @page = Page.find_by_slug!(params[:id])
     end
 
@@ -50,6 +46,7 @@ class PagesController < ApplicationController
       params.require(:page).permit(
         :name,
         :slug,
+        :strapline,
         :body)
     end
 

@@ -12,7 +12,7 @@ module PlaquesHelper
   def search_snippet(text, search_term)
     regex = /#{search_term}/i
     if text =~ regex
-      text = " " + text + " "  #HACK: This is so there's a space before the first word.
+      text = " " + text + " "
       indexes = []
       first_index = text.index(regex)
       indexes << first_index
@@ -35,118 +35,54 @@ module PlaquesHelper
     end
   end
 
-  def kml(plaque, xml)
-    if plaque.geolocated?
-      xml.Placemark do
-        xml.name(plaque.title)
-        xml.description do
-          xml.cdata!(("<p>" + plaque.inscription + "</p> <p><a href=\"" + plaque_url(plaque) + "\">" + thumbnail_img(plaque) + "</a></p>").html_safe)
-        end
-        if plaque.latitude && plaque.longitude
-          xml.Point do
-            xml.coordinates plaque.longitude.to_s + ',' + plaque.latitude.to_s + ",0"
-          end
-        end
-        if plaque.colour && plaque.colour.slug =~ /(blue|black|yellow|red|white|green)/
-          xml.styleUrl "#plaque-" + plaque.colour.slug
-        else
-          xml.styleUrl "#plaque-blue"
-        end
+  def find_flickr_photos_non_api(plaque)
+    url = "https://www.flickr.com/search/?tags=#{plaque.machine_tag}%20"
+    response = ""
+    open(url){|f| response = f.read }
+    pics = response.match( /\[{"_flickrModelRegistry":"photo-lite-models".*?\]/ )
+    pics = "[]" if pics == nil
+    json_parsed = JSON.parse("{\"data\":#{pics}}")
+    json_parsed['data'].each do |pic|
+      photo_url = "https://www.flickr.com/photos/#{pic['ownerNsid']}/#{pic['id']}/"
+      @photo = Photo.find_by_url(photo_url) || Photo.find_by_url(photo_url.sub("https:","http:"))
+      if @photo
+#        puts "we've already got #{photo_url}"
+      else
+        @photo = Photo.new(url: photo_url, plaque: plaque)
+        @photo.populate
+        @photo.save
       end
     end
   end
 
-  # pass null to search all machinetagged photos on Flickr
+  # pass null plaque and flickr_user_id to search all machinetagged photos on Flickr
   def find_photo_by_machinetag(plaque, flickr_user_id)
-#    key = FLICKR_KEY # "86c115028094a06ed5cd19cfe72e8f8b"
+#    key = FLICKR_KEY
     key = "86c115028094a06ed5cd19cfe72e8f8b"
-    content_type = "1" # Photos only
-    machine_tag_key = "storystorm:id=".to_s
-    repeat = 20 # 100 per page, we will check the 2000 most recently created Flickr images
-    if (plaque)
-      machine_tag_key += plaque.id.to_s
-      repeat = 1 # 100 per page, so I hope that one plaque has fewer than 100 Flickr images
-    end
-
-    flickr_url = "https://api.flickr.com/services/rest/"
-    method = "flickr.photos.search"
-    license = "1,2,3,4,5,6,7" # All the CC licencses that allow commercial re-use
-
+    repeat = plaque ? 1 : 20 # 100 per page, we will check the 2000 most recently created Flickr images
     repeat.times do |page|
-
-      url = flickr_url + "?api_key=" + key + "&method=" + method + "&page=" + page.to_s + "&license=" + license + "&content_type=" + content_type + "&machine_tags=" + machine_tag_key +  "&extras=date_taken,owner_name,license,geo,machine_tags"
-
+      machine_tag = plaque ? plaque.machine_tag : "openplaques:id="
+      url = "https://api.flickr.com/services/rest/?api_key=#{key}&method=flickr.photos.search&page=#{page.to_s}&content_type=1&machine_tags=#{machine_tag}&extras=date_taken,owner_name,license,geo,machine_tags"
       if (flickr_user_id)
-        url += "&user_id=" + flickr_user_id
+        url += "&user_id=#{flickr_user_id}"
       end
-      puts "Flickr: " + url
-
-      new_photos_count = 0
+      puts "Flickr: #{url}"
       response = open(url)
       doc = REXML::Document.new(response.read)
       doc.elements.each('//rsp/photos/photo') do |photo|
-        print "."
         $stdout.flush
-
         @photo = nil
-
-        file_url = "http://farm" + photo.attributes["farm"] + ".staticflickr.com/" + photo.attributes["server"] + "/" + photo.attributes["id"] + "_" + photo.attributes["secret"] + "_z.jpg"
-        photo_url = "http://www.flickr.com/photos/" + photo.attributes["owner"] + "/" + photo.attributes["id"] + "/"
-
-        @photo = Photo.find_by_url(photo_url)
-
+        photo_url = "https://www.flickr.com/photos/#{photo.attributes['owner']}/#{photo.attributes['id']}/"
+        @photo = Photo.find_by_url(photo_url) || Photo.find_by_url(photo_url.sub("https:","http:"))
         if @photo
           # we've already got that one
         else
-          plaque_id = photo.attributes["machine_tags"][/storystorm\:id\=(\d+)/, 1]
-
-          puts "Flickr: photo of plaque " + plaque_id.to_s + " '" + photo.attributes["title"] + "'"
-
-          @plaque = Plaque.find(plaque_id)
+          plaque_id = photo.attributes['machine_tags'][/openplaques\:id\=(\d+)/, 1]
+          @plaque = Plaque.find_by_id(plaque_id)
           if @plaque
-            @photo = Photo.new
-            @photo.plaque = @plaque
-            @photo.file_url = file_url
-            @photo.url = photo_url
-            @photo.taken_at = photo.attributes["datetaken"]
-            @photo.photographer_url = photo_url = "http://www.flickr.com/photos/" + photo.attributes["owner"] + "/"
-            @photo.photographer = photo.attributes["ownername"]
-            if photo.attributes["license"] == "4"
-              @photo.licence = Licence.find_by_url("http://creativecommons.org/licenses/by/2.0/")
-            elsif photo.attributes["license"] == "6"
-              @photo.licence = Licence.find_by_url("http://creativecommons.org/licenses/by-nd/2.0/")
-            elsif photo.attributes["license"] == "3"
-              @photo.licence = Licence.find_by_url("http://creativecommons.org/licenses/by-nc-nd/2.0/")
-            elsif photo.attributes["license"] == "2"
-              @photo.licence = Licence.find_by_url("http://creativecommons.org/licenses/by-nc/2.0/")
-            elsif photo.attributes["license"] == "1"
-              @photo.licence = Licence.find_by_url("http://creativecommons.org/licenses/by-nc-sa/2.0/")
-            elsif photo.attributes["license"] == "5"
-              @photo.licence = Licence.find_by_url("http://creativecommons.org/licenses/by-sa/2.0/")
-            elsif photo.attributes["license"] == "7"
-              @photo.licence = Licence.find_by_url("http://www.flickr.com/commons/usage/")
-            elsif photo.attributes["license"] == "0"
-              @photo.licence = Licence.find_by_url("http://en.wikipedia.org/wiki/All_rights_reserved/")
-            else
-              puts "Couldn't find license"
-            end
-            if @photo.save
-              new_photos_count += 1
-              puts "New photo found and saved"
-            else
-#            puts "Error saving photo" + @photo.errors.each_full{|msg| puts msg }
-            end
-
-            if photo.attributes["latitude"] != "0" && photo.attributes["longitude"] != "0" && !@plaque.geolocated?
-              puts "New geolocation found"
-              @plaque.latitude = photo.attributes["latitude"]
-              @plaque.longitude = photo.attributes["longitude"]
-              if @plaque.save
-                puts "New geolocation added to photo"
-              else
-                puts "Error adding geolocation to photo" + plaque.errors.full_messages.to_s #methods.join(" ")
-              end
-            end
+            @photo = Photo.new(url: photo_url, plaque: @plaque)
+            @photo.populate
+            @photo.save
           else
             puts "Photo's machine tag doesn't match a plaque."
           end
@@ -155,109 +91,201 @@ module PlaquesHelper
     end
   end
 
-    # pass null to search all photos on Flickr
-    def crawl_flickr(group_id='74191472@N00')
-    
-      key = "86c115028094a06ed5cd19cfe72e8f8b" # FLICKR_KEY
-      content_type = "1" # Photos only
-      flickr_url = "https://api.flickr.com/services/rest/"
-      method = "flickr.photos.search"
-      jez = User.find(2)
-      black = Colour.find_by_name('black')
-      english = Language.find_by_name('English')
-      new_photos_count = 0
-            
-      19.times do |page|
-        puts page.to_s
-        url = flickr_url + "?api_key=" + key + "&method=" + method + "&page=" + page.to_s + "&per_page=5&content_type=" + content_type + "&extras=date_taken,owner_name,license,geo,description"
-        if group_id
-          url += "&group_id=" + group_id
+  def crawl_kentucky()
+    agent = Mechanize.new
+    page = agent.get('http://migration.kentucky.gov/kyhs/hmdb/MarkerSearch.aspx')
+    form = page.form('aspnetForm')
+    field = form.field_with(name: 'ctl00$MainContentPlaceHolder$searchCriteriaControl$numberTextBox')
+    submit_button = form.button_with(name: 'ctl00$MainContentPlaceHolder$searchCriteriaControl$searchByNumberButton')
+
+    kentucky_historical_society = Organisation.find_by_slug("kentucky_historical_society")
+    kentucky_highways_department = Organisation.find_by_slug("kentucky_highways_department")
+    kentucky_historical_marker = Series.find_by_name("Kentucky Historical Marker")
+    usa = Country.find_by_name("United States")
+    black = Colour.find_by_name("black")
+    english = Language.find_by_name("English")
+    (1..2533).each do |series_ref|
+      field.value = series_ref
+      output = agent.submit(form, submit_button)
+      marker_number = output.search('.//tr[contains(th,"Marker Number")]/td/text()').text.strip
+      if marker_number == ""
+        puts "#{series_ref} does not exist"
+      else
+        title = output.search('.//caption').text.strip
+        inscription = output.search('.//tr[contains(th,"Description")]/td').text.strip
+        location = output.search('.//tr[contains(th,"Location")]/td/text()').text.strip
+        puts "#{marker_number} #{location} #{inscription}"
+        plaque = Plaque.where(series_id: kentucky_historical_marker.id, series_ref: series_ref).first
+        plaque = Plaque.new() if !plaque
+        plaque.address = location
+        plaque.inscription = "#{title}. #{inscription}"
+        plaque.colour = black
+        plaque.language = english
+        plaque.series = kentucky_historical_marker
+        plaque.series_ref = marker_number
+        known_names = [
+          "Athens","Augusta",
+          "Bardstown",
+          "Brandenburg","Brownsville",
+          "Cloverport",
+          "Danville",
+          "Elizabethtown","Elkhorn City",
+          "Frankfort",
+          "Georgetown","Glasgow","Grants Lick","Greensburg","Greenville",
+          "Hopkinsville",
+          "Lebanon","Lexington","Louisville",
+          "Maysville","Monticello",
+          "Paducah",
+          "Radcliff","Russellville",
+          "Sulphur Well",
+          "Williamsburg"
+        ]
+        known_names.each do |known_name|
+          if (location.include?(known_name))
+            area = Area.find_or_create_by(name: "#{known_name}, KY")
+            if (!area.country)
+              area.country = usa
+              area.save
+            end
+            plaque.area = area
+            if plaque.address.end_with?(", #{known_name}")
+              plaque.address = plaque.address.reverse.sub(", #{known_name}".reverse, "").reverse
+            end
+            break
+          end
         end
-        response = open(url)
-        doc = REXML::Document.new(response.read)
-        doc.elements.each('//rsp/photos/photo') do |photo|
-          print "."
-          $stdout.flush
-          @photo = nil
-          file_url = "http://farm" + photo.attributes["farm"] + ".staticflickr.com/" + photo.attributes["server"] + "/" + photo.attributes["id"] + "_" + photo.attributes["secret"] + "_z.jpg"
-          photo_url = "http://www.flickr.com/photos/" + photo.attributes["owner"] + "/" + photo.attributes["id"] + "/"
-          @photo = Photo.find_by_url(photo_url)
-          inscription_is_stub = true
-          if photo.attributes["title"]!=nil
-            subject = photo.attributes["title"].split(",")[0].split("()")[0].rstrip.lstrip + "."
-            inscription = subject
-          end
-          if photo.elements["description"].text != nil && photo.elements["description"].text.length > 50
-            inscription << " " + photo.elements["description"].text
-          end
-          if @photo
-            puts "photo already exists in Open Plaques"
+        plaque.save
+        s = Sponsorship.find_or_create_by(plaque_id: plaque.id, organisation_id: kentucky_historical_society.id)
+        s.save
+        s = Sponsorship.find_or_create_by(plaque_id: plaque.id, organisation_id: kentucky_highways_department.id)
+        s.save
+      end
+    end
+  end
+
+  def north_carolina(state, series, series_ref, colour, sponsors = [])
+    begin
+      output = Nokogiri::HTML(open("http://www.ncmarkers.com/Markers.aspx?MarkerId=#{series_ref}"))
+    rescue OpenURI::HTTPError
+      puts "ref #{series_ref} not found"
+      return
+    end
+    marker_number = output.search('.//input[@name="txtID"]/@value').text.strip
+    if marker_number == ""
+      puts "#{series_ref} does not exist"
+    else
+      title = output.search('.//input[@name="txtTitle"]/@value').text.titlecase.strip
+      inscription = output.search('.//textarea[@name="txtMarkerText"]').text.strip
+      location = output.search('.//textarea[@name="txtLocation"]').text.strip
+      location += ", #{state}"
+      created = output.search('.//input[@name="txtYear"]/@value').text.strip
+      puts "#{series.name} number #{marker_number} at #{location} == #{title}"
+
+      plaque = Plaque.find_or_create_by(series_id: series.id, series_ref: series_ref)
+      plaque.address = location
+      plaque.force_us_state = state
+      plaque.inscription = "#{title}. #{inscription}"
+      plaque.colour = colour
+      plaque.language = Language.find_by_name('English')
+      plaque.series = series
+      plaque.series_ref = marker_number
+      plaque.save
+      sponsors.each do |sponsor|
+        s = Sponsorship.find_or_create_by(plaque_id: plaque.id, organisation_id: sponsor.id)
+        s.save
+      end
+    end
+  end
+
+  def crawl_nevada
+    j = JSON.parse(open("http://shpo.nv.gov/historical-markers-json").read)
+    j.each do |js|
+      nevada(js['marker_number'], js['slug'], js['latitude'], js['longitude'], js['city'], js['county'])
+    end
+  end
+
+  # http://shpo.nv.gov/historical-markers-json
+  def nevada(marker_number, slug, latitude, longitude, city, county)
+    begin
+      output = Nokogiri::HTML(open("http://shpo.nv.gov/nevadas-historical-markers/historical-markers/#{slug}"))
+    rescue OpenURI::HTTPError
+      puts "slug #{slug} not found"
+      return
+    end
+    not_found = output.search('.//h1').text.strip
+    if not_found == "404"
+      puts "#{slug} does not exist"
+    else
+      sponsors = []
+      series = Series.find 59
+      state = "NV"
+      title = output.search('.//article/h1').text.titlecase.strip
+      inscription = output.search('.//article/p').text.strip
+      inscription += output.search('.//article/h3').text.strip
+      usa = Country.find_by_alpha2('us')
+      area = Area.find_or_create_by(country: usa, name: "#{city}, #{state}")
+      puts "#{series.name} number #{marker_number} at #{area.name} == #{title}"
+      plaque = Plaque.find_by(series_id: series.id, series_ref: marker_number)
+      if (plaque)
+        puts "#{series.name} number #{marker_number} already exists"
+      else
+        plaque = Plaque.new(series_id: series.id, series_ref: marker_number, area: area, latitude: latitude, longitude: longitude) if !plaque
+        if /MARKER/.match(inscription)
+          matches = /([\w\W]*)([\bNEVADA\b\s]*[\bSTATE OF NEVADA\b\s]*[STATE\b\s]*[\bCENTENNIAL\b\s]*[\bHISTORIC[AL]*\b\s]*MA[R]*KER)\s(NO[.]*|number|NUMBER)\W*(\d*)\W*(.*)\W*(.*)\W*(.*)\W*(.*)\W*(.*)\W*/i.match(inscription)
+          plaque.inscription = "#{title}."
+          if (matches && matches[1])
+            plaque.inscription += " #{matches[1].gsub('NEVADA CENTENNIAL','').gsub('CENTENNIAL','').gsub('STATE HISTORICAL','')}"
           else
-            # Plaque find by location and name if already exists.....
-#            32.76696, -94.348526
-#            32.766955, -94.348472
-            # Plaque.find_or_create_by_???
-            @plaque = Plaque.new(:inscription => inscription, :user => jez, :inscription_is_stub => inscription_is_stub, :colour => black, :language => english)
-            @plaque.location = Location.new(:name => 'somewhere in Texas')
-            # the Flickr woeids appear to be at town level, so can only create an area from them
-            woeid = photo.attributes["woeid"]
-            if woeid != nil
-              area = Area.find_or_create_by_woeid(woeid)
-              if area != nil
-                @plaque.location.area = area
-              else
-                puts "error: provided woeid " + woeid + " but got no area back"
-              end
-            end
-            if @plaque
-              @photo = Photo.new
-              @photo.plaque = @plaque
-              @photo.file_url = file_url
-              @photo.url = photo_url
-              @photo.taken_at = photo.attributes["datetaken"]
-              @photo.photographer_url = photo_url = "http://www.flickr.com/photos/" + photo.attributes["owner"] + "/"
-              @photo.photographer = photo.attributes["ownername"]
-              @photo.licence = Licence.find_by_flickr_licence_id(photo.attributes["license"])
-              if photo.attributes["latitude"] != "0" && photo.attributes["longitude"] != "0" && !@plaque.geolocated?
-                @plaque.latitude = photo.attributes["latitude"]
-                @plaque.longitude = photo.attributes["longitude"]
-              end
-              if @plaque.save
-                puts "New plaque and photo added"
-              else
-                puts "Error adding plaque " + @plaque.errors.full_messages.to_s
-              end
-              if @photo.save
-                puts "New photo found and saved"
-              else
-                puts "Error saving photo" + @photo.errors.each_full{|msg| puts msg }
-              end
-            end
+            plaque.inscription += inscription
+          end
+          if (matches && matches[5])
+            extra_sponsors = matches[5].gsub(/STATE HISTORIC PRESERVATION OFFICE/i,'').strip
+            sponsors << Organisation.find_or_create_by(name: extra_sponsors.titleize) unless extra_sponsors.blank?
+          end
+          sponsors << Organisation.find_or_create_by(name: 'Nevada State Historic Preservation Office')
+          plaque.language = Language.find_by_name('English')
+          plaque.save
+          sponsors.each do |sponsor|
+            s = Sponsorship.find_or_create_by(plaque_id: plaque.id, organisation_id: sponsor.id)
+            s.save
           end
         end
       end
     end
+  end
+
+  # when you are pretty sure a group contains plaques
+  def crawl_flickr(group_id='74191472@N00')
+    return if !group_id
+    key = "86c115028094a06ed5cd19cfe72e8f8b"
+    (1..1000).each do |page|
+      q_url = "https://api.flickr.com/services/rest/?api_key=#{key}&method=flickr.photos.search&page=#{page.to_s}&per_page=10&content_type=1&group_id=#{group_id}"
+      puts q_url
+      begin
+        response = open(q_url)
+      rescue # random 502 bad gateway from Flickr
+        sleep(5)
+        response = open(q_url)
+      end
+      doc = REXML::Document.new(response.read)
+      pages = doc.root.elements['photos'].attributes['pages']
+      puts "#{page} of #{pages}"
+      doc.elements.each('//rsp/photos/photo') do |photo|
+        $stdout.flush
+        photo_url = "https://www.flickr.com/photos/#{photo.attributes['owner']}/#{photo.attributes['id']}/"
+        @photo = Photo.new(url: photo_url)
+        @photo.populate
+        @photo.match
+        @photo.save
+      end
+      break if page.to_i >= pages.to_i
+    end
+  end
 
   def poi(plaque)
     if plaque.geolocated? && plaque.people.size() > 0
     plaque.longitude.to_s + ', ' + plaque.latitude.to_s + ", \"" + plaque.people.collect(&:name).to_sentence + "\"" + "\r\n"
     end
-  end
-
-  def personal_connection_path(pc)
-    url_for(:controller => "PersonalConnections", :action => :show, :id => pc.id, :plaque_id => pc.plaque_id)
-  end
-
-  def personal_connections_path(plaque)
-    url_for(:controller => "PersonalConnections", :action => :index, :plaque_id => plaque.id)
-  end
-
-  def edit_personal_connection_path(pc)
-    url_for(:controller => "PersonalConnections", :action => :edit, :id => pc.id, :plaque_id => pc.plaque_id)
-  end
-
-  def new_personal_connection_path(plaque)
-    url_for(:controller => "PersonalConnections", :action => :new, :plaque_id => plaque.id)
   end
 
   def erected_date(plaque)
@@ -283,180 +311,43 @@ module PlaquesHelper
       info += org_list.to_sentence.html_safe
       if plaque.erected_at?
         info += " ".html_safe
-        if plaque.erected_at.day == 1 && plaque.erected_at.month == 1
-          info += "in ".html_safe
-        else
-          info += "on ".html_safe + plaque.erected_at.strftime('%d %B') + " "
-        end
-        info += plaque.erected_at.year.to_s
+        info += erected_date(plaque)
       end
-      return content_tag("p", info)
-    else
-      return content_tag("p", "by ".html_safe + content_tag("span", "unknown".html_safe, :class => :unknown))
-    end
-  end
-  
-  def geolocation_if_known(plaque)
-    if plaque.geolocated?
-      geo_microformat(plaque)
-    else
-      unknown()
+      return info
     end
   end
 
-  def map_icon_if_known(plaque)
-    if plaque.geolocated?
-      geo_map_icon_link(plaque)
-    else
-      ""
-    end
-  end
-
-  def google_map_if_known(content, plaque)
-    if plaque.geolocated?
-      link_to_google_map(content, plaque.latitude, plaque.longitude)
-    else
-      unknown()
-    end
-  end
-
-  def google_streetview_if_known(content, plaque)
-    if plaque.geolocated?
-      link_to_google_streetview(content, plaque.latitude, plaque.longitude)
-    else
-      unknown()
-    end
-  end
-
-  def google_earth_if_known(content, plaque)
-    if plaque.geolocated?
-      link_to_google_earth(content, plaque.id)
-    else
-      unknown()
-    end
-  end
-
-  # Generates a link to Open Street Map using latitude ang longitude.
-  def link_to_osm(content, latitude, longitude, marker = true)
-   link_to(content, "http://www.openstreetmap.org/?lat=" + latitude.to_s + "&amp;lon=" + longitude.to_s + "&amp;zoom=17&amp;mlat=" + latitude.to_s + "&amp;mlon=" + longitude.to_s)
-  end
-
-  # Generates a link to Google Maps using latitude ang longitude.
-  def link_to_google_map(content, latitude, longitude)
-   link_to(content, "http://maps.google.co.uk?q=" + latitude.to_s + "," + longitude.to_s)
-  end
-
-  # Generates a link to Google Street View using latitude ang longitude.
-  def link_to_google_streetview(content, latitude, longitude)
-   link_to(content, "http://maps.google.co.uk/?q=" + latitude.to_s + "," + longitude.to_s + "&layer=c&cbll=" + latitude.to_s + "," + longitude.to_s + "&cbp=12,0,,0,5")
-  end
-
-  # Generates a link to Google Earth using id for kml.
-  def link_to_google_earth(content, id)
-   link_to(content, "http://maps.google.co.uk?t=f&q=http://openplaques.org/plaques/" + id.to_s + ".kml")
-  end
-
-  def osm_iframe(latitude, longitude, bboffset = 0.001, height = 200, width = 300, marker = true)
-    bb = (longitude - bboffset).to_s + "," + (latitude - bboffset).to_s + "," + (longitude + bboffset).to_s + "," + (latitude + bboffset).to_s
-
-    osm_embed_src = "http://www.openstreetmap.org/export/embed.html?bbox=" + bb + "&amp;marker=" + latitude.to_s + "," + longitude.to_s + "&amp;layer=mapnik"
-    return content_tag("iframe","",{:height => height, :width => width, :scrolling => "no", :frameborder => "no", :marginheight => "0", :marginwidth => "0", :src => osm_embed_src, :class => "osm"})
-  end
-
-  def geo_microformat(plaque, container = "span")
-    if !plaque.geolocated?
-      return ""
-    end
-    @lat = content_tag("span", plaque.latitude, {:class => "latitude", :property => "geo:lat", :about => "#plaque_location"})
-    @lon = content_tag("span", plaque.longitude, {:class => "longitude", :property => "geo:long", :about => "#plaque_location"})
-    content_tag(container, link_to_osm(@lat + ", " + @lon, plaque.latitude, plaque.longitude), {:class => "geo", :typeof => "geo:Point", :about => "#plaque_location"})
-  end
-
-  def geo_map_icon_link(plaque)
-    if !plaque.geolocated?
-    return "";
-    end
-    @alt = plaque.latitude.to_s + ", " + plaque.longitude.to_s
-    @image = image_tag("map_icon.png", {:alt => @alt})
-    link_to_osm(@image, plaque.latitude, plaque.longitude )
-  end
-
-  def plaque_icon(plaque)
-    if plaque.colour && plaque.colour.slug =~ /(blue|black|yellow|red|white|green)/
-      image_tag("icon-" + plaque.colour.slug + ".png", :size => "16x16")
-    else
-      image_tag("icon-blue.png", :size => "16x16")
-    end
-  end
-
-  def new_linked_inscription(plaque)
-    inscription = plaque.inscription
-    connections = plaque.personal_connections
-    if connections.length > 0
-      connections.each do |connection|
-        if connection.person
-          matched = false
-          nameparts = connection.person.name.split(" ")
-
-          search_for = connection.person.full_name # Sir Joseph Aloysius Hansom 
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && connection.person.titled? && nameparts.length > 2)
-            search_for = connection.person.title + nameparts.first + " " + nameparts.last # Sir Joseph Hansom 
+  def linked_inscription(plaque)
+    inscription = plaque.inscription.split.join(' ').strip.gsub('  ',' ')
+    people = plaque.people
+    if people
+      reduced_inscription = inscription
+      people.each_with_index do |person, person_index|
+        matched = false
+        search_for = ""
+        i = 0
+        person.names.each_with_index do |name, index|
+          if (!matched)
+            search_for = name
+            matched = reduced_inscription.upcase.index(search_for.upcase) != nil
+            i = reduced_inscription.upcase.index(search_for.upcase)
           end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && connection.person.titled?)
-            search_for = connection.person.title + nameparts.last # Sir Hansom 
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && nameparts.length > 2)
-            search_for = nameparts.first + " " + nameparts.second[0,1] + ". " + nameparts.last # Joseph A. Hansom
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && nameparts.length > 1)
-            search_for = nameparts.first + " " + nameparts.last # Joseph Hansom
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && nameparts.length > 1)
-            search_for = ""
-            nameparts.each_with_index do |namepart, index|
-              search_for += namepart[0,1] + ". " if index != nameparts.length - 1
-              search_for += namepart if index == nameparts.length - 1 # J. A. Hansom, J. R. R. Tolkien
-            end
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && nameparts.length > 1)
-            search_for = nameparts.first[0,1] + ". " + nameparts.last # J. Hansom
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && nameparts.length == 3)
-            search_for = nameparts.second + " " + nameparts.last # Aloysius Hansom
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && nameparts.length > 1)
-            search_for = nameparts.first # Joseph
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          if (!matched && nameparts.length > 1)
-            search_for = nameparts.last # Hansom
-          end
-          matched = true if inscription.index(search_for) != nil
-
-          inscription = inscription.gsub(search_for, link_to(search_for, person_path(connection.person))).html_safe if matched
         end
+        reduced_inscription = "#{reduced_inscription[0..i]}#{reduced_inscription[(i + search_for.length - 1)..-1]}" if matched
+        i_inscription = inscription.upcase.index(search_for.upcase)
+        inscription = "#{inscription[0..(i_inscription - 1)] if i_inscription > 0}#{link_to(search_for, person_path(person))}#{inscription[(i_inscription + search_for.length)..-1]}" if i
       end
     end
     inscription += " [full inscription unknown]" if plaque.inscription_is_stub
-    inscription += " [has not been erected yet]" if !plaque.erected? 
-    return inscription
+    inscription += " [has not been erected yet]" if !plaque.erected?
+    return inscription.html_safe
+  end
+
+  def simple_inscription(plaque)
+    inscription = plaque.inscription.split.join(' ').strip.gsub('  ',' ')
+    inscription += " [full inscription unknown]" if plaque.inscription_is_stub
+    inscription += " [has not been erected yet]" if !plaque.erected?
+    return inscription.html_safe
   end
 
   # given a set of plaques, or a thing that has plaques (like an organisation) tell me what the mean point is
@@ -478,7 +369,6 @@ module PlaquesHelper
         end
         @centre.latitude = @lat / @count
         @centre.longitude = @lon / @count
-#        puts ("****** lat= " + @centre.latitude.to_s + ",lon= " + @centre.longitude.to_s + " from " + thing.size.to_s + " plaques, " + @count.to_s + " are geolocated")
         return @centre
       rescue
         # oh, maybe it's a thing that has plaques
@@ -492,10 +382,31 @@ module PlaquesHelper
 
   def geolocation_from(url)
     # https://www.google.com/maps/place/ulitsa+Goncharova,+48,+Ulyanovsk,+Ulyanovskaya+oblast',+Russia,+432011/@54.319775,48.39987,17z/data=!3m1!4b1!4m2!3m1!1s0x415d37692250ea21:0xeab69349916c0171
+    # https://www.google.com/maps/@37.0625,-95.677068,4z
     p = Point.new
-    p.latitude = url[/@+([^,]*)/,1]
-    p.longitude = url[/@[\d|.|-]*,+([\d|.|-]*)/,1]
-    return p
+    r = /@([-\d.\d]*),([-\d.\d]*)/
+    if (url[r])
+      p.latitude = url[r,1].to_f.round(5)
+      p.longitude = url[r,2].to_f.round(5)
+      return p
+    end
+    # or OSM
+    # https://www.openstreetmap.org/#map=17/57.14772/-2.10572
+    r = /map=[\d]*\/([-\d.\d]*)\/([-\d.\d]*)/
+    if (url[r])
+      p.latitude = url[r,1].to_f.round(5)
+      p.longitude = url[r,2].to_f.round(5)
+      return p
+    end
+    # or Geohack
+    # https://tools.wmflabs.org/wiwosm/osm-on-ol/commons-on-osm.php?zoom=16&lat=43.725688888889&lon=7.2722138888889
+    r = /&lat=([-\d.\d]*)&lon=([-\d.\d]*)/
+    if (url[r])
+      p.latitude = url[r,1].to_f.round(5)
+      p.longitude = url[r,2].to_f.round(5)
+      return p
+    end
+    p
   end
 
   class Point
@@ -503,6 +414,10 @@ module PlaquesHelper
     attr_accessor :latitude
     attr_accessor :longitude
     attr_accessor :zoom
+
+    def as_wkt
+      'POINT(' + self.latitude.to_s + ' ' + self.longitude.to_s + ')'
+    end
   end
 
 end

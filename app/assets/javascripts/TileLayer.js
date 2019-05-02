@@ -57,7 +57,7 @@ L.TileLayer.Ajax = L.TileLayer.extend({
             tilePoint4.y = tempY + 1;
             tile4 = { datum: null, processed: false };
             this._loadTile(newZoom, tile4, tilePoint4);
-        } 
+        }
         else if (zoom > 14)
         {
             // zoomed in to too fine a detail
@@ -75,7 +75,7 @@ L.TileLayer.Ajax = L.TileLayer.extend({
         {
             json_url = this.getTileUrl(tilePoint);
             json_url = json_url.replace(/tiles\/([\d]*)/, 'tiles/14')
-            if (null == this._cache[json_url])
+            if (!this._cache[json_url])
             {
                 this._cache[json_url] = true;
                 var layer = this;
@@ -166,7 +166,7 @@ L.TileLayer.GeoJSON = L.TileLayer.Ajax.extend({
     },
 
     _tileLoaded: function (tile) {
-        L.TileLayer.Ajax.prototype._tileLoaded.apply(this, arguments);
+  //      L.TileLayer.Ajax.prototype._tileLoaded.apply(this, arguments);
         if (tile.datum === null) { return null; }
         this.addTileData(tile.datum);
     }

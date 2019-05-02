@@ -1,24 +1,43 @@
-<% content_for :page_title, "Organisations erecting historical plaques" %>
+<% content_for(:page_title) {t '.page_title'} %>
+<% content_for(:title) {t '.page_heading'} %>
+<% content_for(:page_subhead) {pluralize(@organisation_count, "organisation")} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.add'), new_organisation_path} %>
 
-<div class="panel clearfix">
-  <% if current_user && current_user.is_admin? %>
-    <section class="admin_panel">
-      <%= link_to("Add new organisation", new_organisation_path, {:class => :edit, :title => "Add new organisation"})%>
-    </section>
-  <% end %>
-  <h1>Organisations erecting plaques</h1>
-  <p><%= pluralize(@organisations.length, "organisation") %></p>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/holder/2.9.1/holder.js"></script>
+
+<h2>Top 10</h2>
+<div class="row">
+  <div id="top10-chart" class="col-8" style="height: 400px;"></div>
 </div>
 
-<ul id="organisations_results" class="results one_destination_results">
-  <% @organisations.each do |organisation| %>
-    <li>
-      <a href="<%= url_for(organisation) %>">
-        <p class="result"><%= organisation.name %></p>
-        <p class="count"><%= pluralize(organisation.sponsorships.size, "plaque") if organisation.sponsorships.size > 0 %><%= "no plaques" if organisation.sponsorships.size == 0 %></p>
-      </a>
-    </li>
-  <% end %>
-</ul>
+<h2>In alphabetical order</h2>
+<%= will_paginate @organisations if @organisations.respond_to?(:total_pages) %>
+  <div id="organisation-tiles" class="card-columns">
+  <%= render @organisations %>
+</div>
+<%= will_paginate @organisations if @organisations.respond_to?(:total_pages) %>
 
-<p class="alternate_formats">Data about organisations as <%= alternate_link_to "JSON", organisations_path(:json), :json %></p>
+<script>
+  data = [<% @top_10.each do |organisation| %><%= organisation.sponsorships_count %>,<% end %>];
+  hbar = new RGraph.SVG.HBar({
+    id: 'top10-chart',
+    data: data,
+    options: {
+      yaxisLabels: [<% @top_10.each do |o| %>'<%= o %>',<% end %>],
+      colors: ['blue','red','green','orange','blue','red','green','orange','blue'],
+      strokestyle: 'rgba(0,0,0,0)',
+      labelsAbove: true,
+      vmargin: 15,
+      backgroundGrid: false,
+      colorsSequential: true,
+      xlabels: false,
+      gutterLeft: 350,
+      gutterRight: 50,
+      gutterTop: 25,
+      noxaxis: true,
+      noxtickmarks: true,
+      noytickmarks: true,
+    }
+  }).grow();
+
+</script>

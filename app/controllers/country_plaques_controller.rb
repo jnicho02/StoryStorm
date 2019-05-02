@@ -1,49 +1,38 @@
 class CountryPlaquesController < ApplicationController
 
-  before_filter :find_country, :only => [:show]
-  respond_to :html, :kml, :osm, :xml, :json
+  before_action :find, only: [:show]
 
   def show
     @display = 'all'
     if (params[:id] && params[:id]=='unphotographed')
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @country.plaques.unphotographed
-      else
-        @plaques = @country.plaques.unphotographed.paginate(:page => params[:page], :per_page => 50)
-      end
+      request.format == 'html' ? @plaques = @country.plaques.unphotographed.paginate(page: params[:page], per_page: 50) : @plaques = @country.plaques.unphotographed
       @display = 'unphotographed'
     elsif (params[:id] && params[:id]=='current')
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @country.plaques.current
-      else
-        @plaques = @country.plaques.current.paginate(:page => params[:page], :per_page => 50)
-      end
+      request.format == 'html' ? @plaques = @country.plaques.current.paginate(page: params[:page], per_page: 50) : @plaques = @country.plaques.current
     elsif (params[:id] && params[:id]=='ungeolocated')
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @country.plaques.ungeolocated
-      else
-        @plaques = @country.plaques.ungeolocated.paginate(:page => params[:page], :per_page => 50)
-      end
+      request.format == 'html' ? @plaques = @country.plaques.ungeolocated.paginate(page: params[:page], per_page: 50) : @plaques = @country.plaques.ungeolocated
       @display = 'ungeolocated'
     else
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @country.plaques
-      else
-        @plaques = @country.plaques.paginate(:page => params[:page], :per_page => 50)
-      end
+      request.format == 'html' ? @plaques = @country.plaques.paginate(page: params[:page], per_page: 50) : @plaques = @country.plaques
     end
-    respond_with @plaques do |format|
-      format.html
-      format.kml { render "plaques/index" }
-      format.osm { render "plaques/index" }
-      format.xml { render "plaques/index" }
-      format.json { render :json => @plaques.as_json() }
+    respond_to do |format|
+      format.html { render 'countries/plaques/show' }
+      format.json { render json: @plaques }
+      format.geojson { render geojson: @plaques, parent: @country }
+      format.csv {
+        send_data(
+          "\uFEFF#{PlaqueCsv.new(@plaques).build}",
+          type: 'text/csv',
+          filename: "open-plaques-#{@country.name}-#{Date.today.to_s}.csv",
+          disposition: 'attachment'
+        )
+      }
     end
   end
 
   protected
 
-    def find_country
+    def find
       @country = Country.find_by_alpha2!(params[:country_id])
     end
 

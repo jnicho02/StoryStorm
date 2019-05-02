@@ -1,72 +1,57 @@
+require 'aws-sdk-comprehend'
+
 class PersonalConnectionsController < ApplicationController
 
-  before_filter :authenticate_admin!, :only => :destroy
-  before_filter :find, :only => [:edit, :destroy]
-  before_filter :find_plaque, :only => [:edit, :update, :new, :create]
-  before_filter :list_people_and_verbs, :only => [:new, :edit]
+  before_action :authenticate_admin!, only: :destroy
+  before_action :find, only: [:destroy]
+  before_action :find_plaque, only: [:new, :create]
+  before_action :list_people_and_verbs, only: [:new]
+  layout 'plaque_edit', only: :new
 
   def destroy
     @personal_connection.destroy
-    redirect_to :back
-  end
-
-  def edit
-    @locations = Location.order(:name)
-  end
-
-  def update
-    @personal_connection = @plaque.personal_connections.find(params[:id])
-    if params[:personal_connection][:started_at] > ""
-      started_at = params[:personal_connection][:started_at]
-      if started_at =~/\d{4}/
-        started_at = started_at + "-01-01"
-        started_at = Date.parse(started_at)
-        @personal_connection.started_at = started_at
-      end
-    end
-    if params[:personal_connection][:ended_at] > ""
-      ended_at = params[:personal_connection][:ended_at]
-      if ended_at =~/\d{4}/
-        ended_at = ended_at + "-01-01"
-        ended_at = Date.parse(ended_at)
-        @personal_connection.ended_at = ended_at
-      end
-    end
-    if @personal_connection.update_attributes(personal_connection_params)
-      redirect_to edit_plaque_path(@plaque.id)
-    else
-      render :edit
-    end
+    redirect_back(fallback_location: root_path)
   end
 
   def new
     @personal_connection = @plaque.personal_connections.new
+    @suggested_people = []
+    @entities = []
+    begin
+      client = Aws::Comprehend::Client.new(region: 'eu-west-1')
+      @entities = client.detect_entities({
+        text: @plaque.inscription_preferably_in_english,
+        language_code: :en,
+      })
+      @entities = @entities['entities']
+      @entities.each_with_index {|ent, i|
+        if ent.type == 'PERSON'
+          term = ent.text
+          term += " (#{@entities[i+1].text}" if @entities[i+1]&.type == 'DATE'
+          term += "-#{@entities[i+2].text})" if @entities[i+2]&.type == 'DATE'
+          search_result = Person.search(term)
+          @suggested_people += search_result if search_result
+        end
+      }
+    rescue
+    end
+    puts "@suggested_people #{@suggested_people}"
   end
 
   def create
+    if params[:personal_connection][:started_at] =~/\d{4}/
+      params[:personal_connection][:started_at] += '-01-01 00:00:01'
+    end
+    if params[:personal_connection][:ended_at] =~/\d{4}/
+      params[:personal_connection][:ended_at] += '-01-01 00:00:01'
+    end
     @personal_connection = @plaque.personal_connections.new
+    @personal_connection.started_at = params[:personal_connection][:started_at]
+    @personal_connection.ended_at = params[:personal_connection][:ended_at]
     @personal_connection.person_id = params[:personal_connection][:person_id]
     @personal_connection.verb_id = params[:personal_connection][:verb_id]
-    @personal_connection.location_id = params[:personal_connection][:location_id]
-
-    if params[:personal_connection][:started_at] > ""
-      started_at = params[:personal_connection][:started_at]
-      if started_at =~/\d{4}/
-        started_at = started_at + "-01-01"
-        started_at = Date.parse(started_at)
-        @personal_connection.started_at = started_at
-      end
-    end
-    if params[:personal_connection][:ended_at] > ""
-      ended_at = params[:personal_connection][:ended_at]
-      if ended_at =~/\d{4}/
-        ended_at = ended_at + "-01-01"
-        ended_at = Date.parse(ended_at)
-        @personal_connection.ended_at = ended_at
-      end
-    end
     if @personal_connection.save
-      redirect_to :back
+      redirect_back(fallback_location: root_path)
     else
       # can we just redirect to new?
       list_people_and_verbs
@@ -83,11 +68,9 @@ class PersonalConnectionsController < ApplicationController
     def find_plaque
       @plaque = Plaque.find(params[:plaque_id])
     end
-    
+
     def list_people_and_verbs
-      @people = Person.order(:name, :born_on).select('id, name, born_on, died_on')
       @verbs = Verb.order(:name).select('id, name')
-      @common_verbs = nil # Verb.common
     end
 
   private
@@ -96,7 +79,6 @@ class PersonalConnectionsController < ApplicationController
       params.require(:personal_connection).permit(
         :person_id,
         :verb_id,
-        :location_id,
         :started_at,
         :ended_at,
       )

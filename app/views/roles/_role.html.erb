@@ -1,0 +1,19 @@
+<div class="card vcard">
+  <div class="card-block">
+    <h6 class="card-title">
+      <%= icon('user') if role.person?%>
+      <%= icon('paw') if role.animal? %>
+      <%= icon('users') if role.group? %>
+      <%= icon('building') if role.place? %>
+      <%= icon('map-marker') if role.thing? %>
+      <% if controller.controller_name.eql?('roles') && controller.action_name.eql?('show') %>
+        <%= role.name.pluralize %>
+      <% else %>
+        <%= link_to role.name, role %>
+      <% end %>
+      <span class="badge badge-secondary">
+        <%= role.personal_roles_count %>
+      </span>
+    </h6>
+  </div>
+</div>

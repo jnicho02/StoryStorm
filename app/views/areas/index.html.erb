@@ -1,19 +1,13 @@
-<% content_for :page_title, "Historical plaques in " + @country.name + " - by area" %>
+<% content_for(:page_title) {t '.page_title', country: @country.name} %>
+<% content_for(:title) {render @country} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.edit'), edit_country_path(@country)} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.add'), new_country_area_path(@country.alpha2)} %>
 
-<div class="panel">
-  <h1><%= @country.name %> - by area</h1>
-
-
-  <% if @areas.size > 0 %>
-    <%= content_tag("ul") do %>
-      <% @areas.each do |area| %>
-        <%= content_tag("li") do %>
-          <%= link_to area.name, country_area_path(area.country, area) %>
-          <%= "(" + pluralize(area.plaques.size, "plaque") + ")" %>
-        <% end %>
-      <% end %>
-    <% end %>
+<% @country.areas.sort { |a,b| a.state.to_s <=> b.state.to_s }.group_by(&:state).each do |state, areas| %>
+  <% if !state.blank? %>
+    <h2>Region: <%= state %></h2>
   <% end %>
-
-  <%= content_tag("p", link_to("Add new area", new_country_area_path(@country.alpha2))) if current_user.try(:is_admin?) %>
-</div>
+  <div class="card-columns">
+    <%= render areas %>
+  </div>
+<% end %>

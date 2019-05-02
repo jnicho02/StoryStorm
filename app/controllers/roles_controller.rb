@@ -1,70 +1,75 @@
 class RolesController < ApplicationController
 
-  before_filter :authenticate_admin!, :only => :destroy
-  before_filter :authenticate_user!, :except => [:index, :show]
-  before_filter :find, :only => [:show, :edit, :update]
+  before_action :authenticate_admin!, only: :destroy
+  before_action :authenticate_user!, except: [:index, :show]
+  before_action :find, only: [:edit, :update]
 
   def index
     respond_to do |format|
       format.html { redirect_to(roles_by_index_path('a')) }
-      @roles = Role.by_popularity
-      format.json { render :json => @roles }
+      format.json {
+        @roles = Role.all.order("personal_roles_count DESC nulls last")
+        render json: @roles
+      }
     end
   end
 
-  # GET /roles/artist
-  # GET /roles/artist.xml
+  def autocomplete
+    limit = params[:limit] ? params[:limit] : 5
+    @roles = "{}"
+    @roles = Role.select(:id,:name)
+      .name_contains(params[:contains])
+      .limit(limit) if params[:contains]
+    @roles = Role.select(:id,:name)
+      .name_starts_with(params[:starts_with])
+      .limit(limit) if params[:starts_with]
+    render json: @roles.as_json(
+      only: [:id, :name]
+    )
+  end
+
   def show
-    @related_roles = @role.related_roles
-    for person in @role.people
-      if person # a role record may exist that no longer has a person joined to it
-        if (@plaques == nil)
-          @plaques = person.plaques
-        else
-          @plaques = @plaques + person.plaques
-        end
-      end
+    @role = Role.find_by_slug(params[:id])
+    @role = Role.new(name: params[:id]) if !@role #dummy role
+    if @role.name.starts_with?("monarch")
+      @monarchs = Role.where(:slug => [@role.name.gsub('monarch','king'), @role.name.gsub('monarch','queen')])
+      @personal_roles = @role.personal_roles
+      @monarchs.each {|m| @personal_roles << m.personal_roles}
+      @personal_roles = @personal_roles.sort { |a,b| a.started_at.to_s <=> b.started_at.to_s }
+    else
+      @personal_roles = @role.personal_roles
+        .paginate(page: params[:page], per_page: 20)
     end
-    @zoom = 7
+    @pluralized_role = @role.pluralize
     respond_to do |format|
       format.html
-      format.json { render :json => @role }
+      format.json { render json: @role }
     end
   end
 
-  # GET /roles/new
-  # GET /roles/new.xml
   def new
     @role = Role.new
   end
 
-  # POST /roles
-  # POST /roles.xml
   def create
     @role = Role.new(role_params)
     respond_to do |format|
       if @role.save
         flash[:notice] = 'Role was successfully created.'
         format.html { redirect_to(role_path(@role.slug)) }
-        format.xml  { render :xml => @role, :status => :created, :location => @role }
       else
         format.html { render "new" }
-        format.xml  { render :xml => @role.errors, :status => :unprocessable_entity }
       end
     end
   end
 
-  # PUT /roles/1
-  # PUT /roles/1.xml
   def update
     respond_to do |format|
-    if @role.update_attributes(role_params)
+      if @role.update_attributes(role_params)
         flash[:notice] = 'Role was successfully updated.'
         format.html { redirect_to(role_path(@role.slug)) }
-        format.xml  { head :ok }
       else
         format.html { render "edit" }
-        format.xml  { render :xml => @role.errors, :status => :unprocessable_entity }
       end
     end
   end
@@ -79,12 +84,16 @@ class RolesController < ApplicationController
 
     def role_params
       params.require(:role).permit(
-        :name,
         :abbreviation,
-        :slug,
-        :wikipedia_stub,
-        :role_type,
         :commit,
-        :id)
+        :description,
+        :id,
+        :name,
+        :prefix,
+        :priority,
+        :role_type,
+        :suffix,
+        :slug,
+        :wikidata_id)
     end
 end

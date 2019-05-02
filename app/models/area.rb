@@ -1,98 +1,107 @@
-# This class represents 'areas', which are the largest commonly identified region of
-# residence  below a country level. By this, we mean the place that people would normally
-# name in answer to the question of 'where do you live?' In most cases, this will be either
-# a city (eg 'London'), town (eg 'Margate'), or village. It should not normally be either a
-# state, county, district or other administrative region.
-#
+# frozen_string_literal: true
+
+# The largest commonly identified region of residence below a country level.
+# By this, we mean the place that people would normally name in answer to the
+# question of 'where do you live?'.
+# In most cases, this will be either a city (eg 'London'), town (eg 'Margate'),
+# or village.
+# It should not normally be either a state, county, district or other
+# administrative region.
 # === Attributes
+# * +dbpedia_uri+ - uri to link to DBPedia record
+# * +latitude+ - location
+# * +longitude+ - location
 # * +name+ - the area's common name (not neccessarily 'official')
-# * +slug+ - an identifier used in URLs. Normally a lower-cased version of name, with spaces replaced by underscores
-# * +latitude+ - Mean location of plaques
-# * +longitude+ - Mean location of plaques
-#
-# === Associations
-# * Country - country in which the area falls geographically or administratively.
-# * Locations - places that are in this are
-# * Plaques - plaques located in this area (via locations).
+# * +plaques_count+ - cached count of plaques
+# * +slug+ - a textual identifier, usually equivalent to its name in lower case,
+#            with spaces replaced by underscores. Used in URLs.
+class Area < ApplicationRecord
+  belongs_to :country, counter_cache: true
+  has_many :plaques, dependent: :restrict_with_error
 
-class Area < ActiveRecord::Base
+  delegate :alpha2, to: :country, prefix: true
 
-  before_validation :make_slug_not_war, :find_centre
+  before_validation :make_slug_not_war
   validates_presence_of :name, :slug, :country_id
-  validates_uniqueness_of :slug, :scope => :country_id
-#  validates_format_of :slug, :with => /^[a-z\_]+$/, :message => "can only contain lowercase letters and underscores"
-
-  belongs_to :country, :counter_cache => true
-  delegate :alpha2, :to => :country, :prefix => true
-
-  has_many :locations
-  has_many :plaques, :through => :locations
-
+  validates_uniqueness_of :slug, scope: :country_id
   default_scope { order('name ASC') }
+  scope :name_starts_with, ->(term) { where(['lower(name) LIKE ?', term.downcase + '%']) }
+  scope :name_contains, ->(term) { where(['lower(name) LIKE ?', '%' + term.downcase + '%']) }
 
   include ApplicationHelper
   include PlaquesHelper
-  
-  def as_json(options={})
-    if options.size != 0
-      super(options)
-    else
-      {:label => name, :value => name, :id => id, :country_id => country.id, :country_name => country.name}
-    end
-  end
-
-  # cannot use this yet as the plaque.new screen relies on a short format
-  def as_json_new(options={})
-    if options.size == 0
-      options = {
-        :only => :name,
-        :include => { 
-          :country => {
-            :only => [:name],
-            :methods => :uri
-          }
-        },
-        :methods => [:uri, :plaques_uri]
-      }
-    end
-
-    {
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [self.longitude, self.latitude]
-      },
-      properties: 
-        as_json(options)
-    }
-  end
-
-  def find_centre
-    if !geolocated?
-      @mean = find_mean(self.plaques.geolocated)
-      self.latitude = @mean.latitude
-      self.longitude = @mean.longitude
-    end
-  end
 
   def geolocated?
-    return !(self.latitude == nil || self.longitude == nil || self.latitude == 51.475 && self.longitude == 0)
+    !(latitude.nil? || longitude.nil? || latitude == 51.475 && longitude.zero?)
+  end
+
+  def full_name
+    "#{name}, #{country.name}"
+  end
+
+  def people
+    people = []
+    plaques.each do |plaque|
+      next if plaque.people.nil?
+      plaque.people.each do |person|
+        people << person
+      end
+    end
+    people.uniq
+  end
+
+  def as_json(options = nil)
+    if !options || !options[:only]
+      options = {
+        only: %i[name plaques_count],
+        include: {
+          country: {
+            only: [:name],
+            methods: :uri
+          }
+        },
+        methods: %i[uri plaques_uri]
+      }
+    end
+    super options
   end
 
   def to_param
     slug
   end
-  
+
   def to_s
     name
   end
 
   def uri
-    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.country_area_path(self.country, self, :format => :json) if id && country
+    return nil unless id && country
+    path = Rails.application.routes.url_helpers.country_area_path(
+      country, self, format: :json
+    )
+    "http://storystorm.herokuapp.com#{path}"
   end
 
   def plaques_uri
-    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.country_area_plaques_path(self.country, self, :format => :json) if id && country
+    return nil unless id && country
+    path = Rails.application.routes.url_helpers.country_area_plaques_path(
+      country, self, format: :json
+    )
+    "http://storystorm.herokuapp.com#{path}"
   end
 
+  def main_photo
+    random_plaque = plaques.photographed.order(Arel.sql('random()')).limit(1).first
+    random_plaque ? random_plaque.main_photo : nil
+  end
+
+  def state
+    matches = /(.*), ([A-Z][A-Z]\z)/.match(name)
+    matches[2] if matches
+  end
+
+  def town
+    matches = /(.*), ([A-Z][A-Z]\z)/.match(name)
+    matches[1] if matches
+  end
 end

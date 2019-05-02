@@ -1,13 +1,21 @@
 class PicksController < ApplicationController
 
-  before_filter :find, :only => [:edit, :update, :show, :destroy]
-  respond_to :json
-  
+  before_action :find, only: [:edit, :update, :show, :destroy]
+
   def index
     @picks = Pick.all
+    @todays = Pick.todays
     respond_to do |format|
       format.html
-      format.json { render :json => @picks }
+      format.json { render json: @picks }
+      format.geojson { render geojson: @picks }
+    end
+  end
+
+  def show
+    respond_to do |format|
+      format.json { render json: @pick }
+      format.geojson { render geojson: @pick }
     end
   end
 
@@ -20,11 +28,6 @@ class PicksController < ApplicationController
     @plaque = Plaque.find(params[:pick][:plaque_id])
     @pick.plaque = @plaque
     @pick.save
-    redirect_to picks_path
-  end
-
-  def destroy
-    @pick.destroy
     redirect_to picks_path
   end
 

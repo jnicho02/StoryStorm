@@ -1,52 +1,45 @@
 class OrganisationsController < ApplicationController
 
-  before_filter :authenticate_admin!, :only => :destroy
-  before_filter :authenticate_user!, :except => [:index, :show]
-  before_filter :find, :only => [:edit, :update]
+  before_action :authenticate_admin!, only: :destroy
+  before_action :authenticate_user!, except: [:autocomplete, :index, :show]
+  before_action :find, only: [:edit, :update]
+  before_action :find_languages, only: [:edit, :create]
 
   def index
-    if params[:name_starts_with]
-      limit = params[:limit] ? params[:limit] : 5
-      @organisations = Organisation.name_contains(params[:name_starts_with]).limit(limit).most_plaques_order
-    else
-      @organisations = Organisation.all
-    end
+    @organisation_count = Organisation.all.count
+    @organisations = Organisation.all
+      .select(:language_id, :name, :slug, :sponsorships_count)
+      .in_alphabetical_order
+      .paginate(page: params[:page], per_page: 50)
+    @top_10 = Organisation.all
+      .select(:name, :slug, :sponsorships_count)
+      .in_count_order
+      .limit(10)
     respond_to do |format|
       format.html
-      format.kml {
-        @parent = @organisations
-        render "plaques/index"
+      format.json { render json: @organisations }
+      format.geojson {
+        @organisations = Organisation.all.in_alphabetical_order
+        render geojson: @organisations
       }
-      format.xml
-      format.json { render :json => @organisations }
     end
   end
 
+  def autocomplete
+    limit = params[:limit] ? params[:limit] : 5
+    if params[:contains]
+      @organisations = Organisation.select(:id, :name).name_contains(params[:contains]).limit(limit)
+    elsif params[:starts_with]
+      @organisations = Organisation.select(:id, :name).name_starts_with(params[:starts_with]).limit(limit)
+    else
+      @organisations = "{}"
+    end
+    render json: @organisations.as_json(only: [:id, :name])
+  end
+
   def show
-    begin
-      if (params[:id]=="oxfordshire_blue_plaques_scheme") 
-        params[:id] = "oxfordshire_blue_plaques_board"
-        redirect_to(organisation_path(params[:id])) and return
-      end
-      @organisation = Organisation.find_by_slug!(params[:id])
-    rescue
-      @organisation = Organisation.find(params[:id])
-      redirect_to(organisation_path(@organisation.slug), :status => :moved_permanently) and return
-    end
-    @sponsorships = @organisation.sponsorships.paginate(:page => params[:page], :per_page => 50)
-    @mean = @organisation
-    @zoom = @organisation.zoom
-    respond_to do |format|
-      format.html
-      format.kml {
-        @plaques = @organisation.plaques
-        render "plaques/index"
-      }
-      format.xml
-      format.json {
-        render :json => @organisation
-      }
-    end
+    params[:id] = "oxfordshire_blue_plaques_board" if (params[:id]=="oxfordshire_blue_plaques_scheme")
+    redirect_to(organisation_plaques_path(params[:id])) and return
   end
 
   def new
@@ -64,12 +57,19 @@ class OrganisationsController < ApplicationController
 
   def update
     old_slug = @organisation.slug
+    if (params[:streetview_url] && params[:streetview_url]!='')
+      point = help.geolocation_from params[:streetview_url]
+      if !point.latitude.blank? && !point.longitude.blank?
+        params[:organisation][:latitude] = point.latitude
+        params[:organisation][:longitude] = point.longitude
+      end
+    end
     if @organisation.update_attributes(organisation_params)
       flash[:notice] = 'Updates to organisation saved.'
       redirect_to organisation_path(@organisation.slug)
     else
       @organisation.slug = old_slug
-      render "edit"
+      render :edit
     end
   end
 
@@ -77,10 +77,13 @@ class OrganisationsController < ApplicationController
 
     def find
       @organisation = Organisation.find_by_slug!(params[:id])
-      if (!@organisation.geolocated? && @organisation.plaques.geolocated.size > 3)
-        @organisation.save
-      end
     end
+
+    def find_languages
+      @languages = Language.order(name: :desc)
+    end
+
+  private
 
     def help
       Helper.instance
@@ -91,16 +94,17 @@ class OrganisationsController < ApplicationController
       include PlaquesHelper
     end
 
-  private
-
     def organisation_params
       params.require(:organisation).permit(
-        :name,
-        :slug,
+        :description,
+        :language_id,
         :latitude,
         :longitude,
+        :name,
+        :notes,
+        :slug,
+        :streetview_url,
         :website,
-        :description,
-        :notes)
+      )
     end
 end

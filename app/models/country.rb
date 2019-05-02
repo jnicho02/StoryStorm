@@ -1,86 +1,55 @@
-# This class represents 'countries', as defined by the ISO country codes specification.
+# A top-level region definition as defined by the ISO country codes specification.
 # === Attributes
+# * +alpha2+ - 2-letter ISO standard code. Used in URLs.
+# * +areas_count+ - cached count of areas
+# * +description+ - commentary on how this region commemorates subjects
+# * +latitude+ - location
+# * +longitude+ - location
 # * +name+ - the country's common name (not necessarily its official one).
-# * +alpha2+ - 2-letter code as defined by the ISO standard. Used in URLs.
-# * +dbpedia_uri+ - uri to link to DBPedia record
-#
-# === Associations
-# * Areas - areas located in this country.
-#
-# === Indirect Associations
-# * Locations - addresses which are located in this country.
-# * Plaques - plaques which are located in this country.
-
-class Country < ActiveRecord::Base
+# * +plaques_count+ - cached count of plaques
+# * +wikidata_id+ - Q-code to match to Wikidata
+class Country < ApplicationRecord
+  has_many :areas
+  has_many :plaques, through: :areas
 
   validates_presence_of :name, :alpha2
   validates_uniqueness_of :name, :alpha2
-#  validates_format_of :alpha2, :with => /^[a-z]{2}$/, :message => "must be a 2 letter code"
 
-  has_many :areas
-  has_many :locations, :through => :areas
-  has_many :plaques, :through => :locations
-
-  @@latitude = nil
-  @@longitude = nil
+  @@p_count = 0
 
   include PlaquesHelper
 
-  def find_centre
-    if !geolocated?
-      @mean = find_mean(self.areas)
-      @@latitude = @mean.latitude
-      @@longitude = @mean.longitude
-    end
-  end
-
   def geolocated?
-    return !(@@latitude == nil || @@longitude == nil || @@latitude == 51.475 && @@longitude == 0)
+    !(latitude.nil? || longitude.nil? || latitude == 51.475 && longitude.zero?)
   end
 
-  def latitude
-    @@latitude
-  end
-
-  def longitude
-    @@longitude
+  def plaques_count
+    @@p_count = areas.sum(:plaques_count) if @@p_count = 0
+    @@p_count
   end
 
   def zoom
-    6
+    self.preferred_zoom_level || 6
   end
 
-  # Construct paths using the alpha2 code
+  def as_json(options={})
+    options = {
+      only: [:name],
+      methods: [:uri, :plaques_count, :areas_count]
+    } if !options || !options[:only]
+    super options
+  end
+
   def to_param
     alpha2
   end
 
   def uri
-    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.country_path(self, :format => :json) if id
+    "http://storystorm.herokuapp.com#{Rails.application.routes.url_helpers.country_path(self, format: :json)}" if id
   end
 
   def to_s
     name
-  end
-
-  def as_json(options={})
-    find_centre
-    if options[:size] == 0
-      options = {
-        :only => [:name, :uri, :dbpedia_uri],
-        :include => { :areas => {:only => [:name], :methods => :uri}},
-        :methods => [:uri]
-      }
-    end
-    {
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [@@longitude, @@latitude]
-      },
-      properties:
-        super(options)
-    }
   end
 
 end

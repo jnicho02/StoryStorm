@@ -1,5 +1,33 @@
 # See http://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
 #
-# To ban all spiders from the entire site uncomment the next two lines:
-# User-agent: *
-# Disallow: /
+User-agent: *
+Disallow: *.geojson
+Disallow: *.json
+Disallow: *.kml
+Disallow: *.xml
+Disallow: /places
+Disallow: /places/*
+Disallow: /places/*/*
+Disallow: /places/*/*/*
+Disallow: /places/*/*/*/*
+Disallow: /plaques/*/*
+Disallow: /organisations
+Disallow: /organisations/*
+Disallow: /organisations/*/*
+Disallow: /photographers
+Disallow: /photographers/*
+Disallow: /roles
+Disallow: /roles/*
+Disallow: /verbs
+Disallow: /verbs/*
+Disallow: /todo
+Disallow: /todo/*
+Disallow: /series
+Disallow: /series/*
+Disallow: /people/*/plaques
+Disallow: /photos
+Disallow: /photos/*
+User-agent: SemrushBot
+Disallow: /
+User-agent: SemrushBot-SA
+Disallow: /

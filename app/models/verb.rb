@@ -1,20 +1,15 @@
-# A verb that connects a person with a location, eg 'lived', 'worked' or 'played'.
-#
+# A verb connecting a subject with a location, eg 'lived', 'worked' or 'played'.
 # === Attributes
 # * +name+ - The name of the verb, in past tense, eg 'lived'.
-#
-# === Associations
-# * +plaques+ - The plaques on which this verb is used.
-# * +people+ - The people associated with this verb.
-# * +locations+ - The locations associated with this verb.
-# * +personal_connections+ - The personal connections (joining model) which connect with this verb.
-class Verb < ActiveRecord::Base
+# * +personal_connections_count+ - cached count of people connected to this verb
+class Verb < ApplicationRecord
+  has_many :personal_connections
+  has_many :people, through: :personal_connections
 
   validates_presence_of :name
   validates_uniqueness_of :name
-
-  has_many :personal_connections
-  has_many :people, :through => :personal_connections
+  scope :name_starts_with, lambda {|term| where(["lower(name) LIKE ?", term.downcase + "%"]) }
+  scope :name_contains, lambda {|term| where(["lower(name) LIKE ?", "%" + term.downcase + "%"]) }
 
   def self.common
     [Verb.find_by_name("was born"),Verb.find_by_name("lived"),Verb.find_by_name("died")].compact
@@ -29,16 +24,21 @@ class Verb < ActiveRecord::Base
   end
 
   def uri
-    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.verb_path(self, :format => :json)
+    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.verb_path(self, format: :json)
   end
 
-  def as_json(options={})
-    # this ignores the user's options
-    super(:only => [:name],
-      :include => {
-        :people => {:only => [:name], :methods => [:uri]}
-      },
-      :methods => [:uri]
-    )
+  def as_json(options=nil)
+    if options && options[:only]
+    else
+      options = {
+        only: [:name],
+        include: {
+          people: {only: [:name], methods: [:uri]}
+        },
+        methods: [:uri]
+      }
+    end
+    super(options)
   end
+
 end
