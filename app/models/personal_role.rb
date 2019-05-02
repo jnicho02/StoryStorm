@@ -1,12 +1,9 @@
 # A connection between a subject and a role.
 # === Attributes
-# * +created_at+
-# * +updated_at+
-# * +started_at+ - when the person started doing what they did at the place
 # * +ended_at+ - when the person stopped doing what they did at the place
 # * +ordinal+ - whether they were the first, second, third, or not stated
+# * +started_at+ - when the person started doing what they did at the place
 class PersonalRole < ApplicationRecord
-
   belongs_to :person, counter_cache: true
   belongs_to :role, counter_cache: true
   belongs_to :related_person, class_name: "Person", optional: true
@@ -38,6 +35,18 @@ class PersonalRole < ApplicationRecord
       n += ' of ' + related_person.name
     end
     n
+  end
+
+  def suffix
+    s = role.suffix
+    if s.include?('#{ordinal}')
+      if ordinal
+        s = s.sub!('#{ordinal}', ordinal.ordinalize)
+      else
+        s = s.sub!('#{ordinal} ', '')
+      end
+    end
+    s
   end
 
   def current?

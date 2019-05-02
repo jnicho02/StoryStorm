@@ -38,8 +38,14 @@ Rails.application.routes.draw do
       get 'autocomplete', controller: :areas
     end
     resource :plaques, controller: :country_plaques, only: :show
+    resource :subjects, controller: :country_subjects, only: :show
+    match 'plaques/:filter' => 'country_plaques#show', via: [:get]
     resources :areas do
+      member do
+        post 'geolocate'
+      end
       resource :plaques, controller: :area_plaques, only: :show
+      resource :subjects, controller: :area_subjects, only: :show
       match 'plaques/tiles/:zoom/:x/:y' => 'area_plaques#show', constraints: { zoom: /\d{2}/, x: /\d+/, y: /\d+/ }, via: [:get]
       match 'plaques/:filter/tiles/:zoom/:x/:y' => 'area_plaques#show', id: :filter, constraints: { zoom: /\d{2}/, x: /\d+/, y: /\d+/ }, via: [:get]
       match 'plaques/:filter' => 'area_plaques#show', via: [:get]
@@ -48,17 +54,20 @@ Rails.application.routes.draw do
 
   resources :photos
   resources :photographers, as: :photographers, only: [:create, :index, :show, :new]
-  resources :licences, only: [:index, :show]
+  resources :licences, only: [:index]
 
   resources :organisations do
     collection do
       get 'autocomplete'
     end
+    member do
+      post 'geolocate'
+    end
     resource :plaques, controller: :organisation_plaques, only: :show
     match 'plaques/tiles/:zoom/:x/:y' => 'organisation_plaques#show', constraints: { zoom: /\d{2}/, x: /\d+/, y: /\d+/ }, via: [:get]
     match 'plaques/:filter/tiles/:zoom/:x/:y' => 'organisation_plaques#show', id: :filter, constraints: { zoom: /\d{2}/, x: /\d+/, y: /\d+/ }, via: [:get]
     match 'plaques/:filter' => 'organisation_plaques#show', via: [:get]
-    resource :people, controller: :organisation_people, only: :show
+    resource :subjects, controller: :organisation_subjects, only: :show
   end
 
   scope '/unveilings' do
@@ -100,6 +109,9 @@ Rails.application.routes.draw do
   resources :languages
   resources :colours, only: [:index, :new, :create]
   resources :series do
+    member do
+      post 'geolocate'
+    end
     resource :plaques, controller: :series_plaques, only: :show
     match 'plaques/tiles/:zoom/:x/:y' => 'series_plaques#show', constraints: { zoom: /\d{2}/, x: /\d+/, y: /\d+/ }, via: [:get]
     match 'plaques/:filter/tiles/:zoom/:x/:y' => 'series_plaques#show', id: :filter, constraints: { zoom: /\d{2}/, x: /\d+/, y: /\d+/ }, via: [:get]

@@ -3,35 +3,33 @@
 # was once installed on a building, site or monument. Our definition of plaques is quite wide,
 # encompassing 'traditional' blue plaques that commemorate a historic person's connection to a
 # place, as well as plaques that commemorate buildings, events, and so on.
-#
 # === Attributes
+# * +address+ - the physical street address
+# * +description+ - additional information
 # * +erected_at+ - The date on which the plaque was erected. Optional.
-# * +latitude+ - location (as a decimal in WSG-84 projection). Optional.
-# * +longitude+ - location (as a decimal in WSG-84 projection). Optional.
-# * +created_at+
-# * +updated_at+
 # * +inscription+ - The text inscription on the self.
-# * +reference+ - An official reference number or identifier for the self. Sometimes marked on the actual plaque itself, sometimes only in promotional material. Optional.
-# * +notes+ - A general purpose notes field for internal admin and data-collection purposes.
-# * +parsed_inscription+ - (not used?)
-# * +photos_count+ -
-# * +description+ -
+# * +inscription_in_english+ - Manual translation
 # * +inscription_is_stub+ - The inscription is incomplete and needs entering.
-# * +personal_connections_count+ -
 # * +is_accurate_geolocation+ -
 # * +is_current+ - Whether the plaque is currently on display (or has it been stolen!)
-# * +inscription_in_english+ - Manual translation
+# * +latitude+ - location (as a decimal in WSG-84 projection). Optional.
+# * +longitude+ - location (as a decimal in WSG-84 projection). Optional.
+# * +notes+ - A general purpose notes field for internal admin and data-collection purposes.
+# * +parsed_inscription+ - (not used?)
+# * +personal_connections_count+ -
+# * +photos_count+ -
+# * +reference+ - An official reference number or identifier for the self. Sometimes marked on the actual plaque itself, sometimes only in promotional material. Optional.
 # * +series_ref+ - if part of a series does it have a reference number/id?
-# * +address+ - the physical street address
-class Plaque < ApplicationRecord
+require 'aws-sdk-translate'
 
+class Plaque < ApplicationRecord
   belongs_to :area, counter_cache: true, optional: true
   belongs_to :colour, counter_cache: true, optional: true
   belongs_to :language, counter_cache: true, optional: true
   belongs_to :series, counter_cache: true, optional: true
-  has_many :personal_connections
+  has_many :personal_connections, dependent: :destroy
   has_many :photos, -> { where(of_a_plaque: true).order('shot ASC')}, inverse_of: :plaque
-  has_many :sponsorships
+  has_many :sponsorships, dependent: :destroy
   has_many :organisations, through: :sponsorships
   has_one :pick
 
@@ -41,6 +39,8 @@ class Plaque < ApplicationRecord
 
   before_save :use_other_colour_id
   before_save :usa_townify
+  before_save :unshout
+  before_save :translate
   accepts_nested_attributes_for :photos, reject_if: proc { |attributes| attributes['photo_url'].blank? }
   scope :current, -> { where(is_current: true).order('id desc') }
   scope :geolocated, ->  { where(["plaques.latitude IS NOT NULL"]) }
@@ -58,7 +58,8 @@ class Plaque < ApplicationRecord
   scope :partial_inscription, -> { where(inscription_is_stub: true).order("id DESC") }
   scope :partial_inscription_photo, -> { where(photos_count: 1..99999, inscription_is_stub: true).order("id DESC") }
   scope :no_english_version, -> { where("language_id > 1").where(inscription_is_stub: false, inscription_in_english: nil) }
-  scope :random, -> { order('random()') }
+  scope :random, -> { order(Arel.sql('random()')) }
+  scope :in_series_ref_order, -> { order('series_ref ASC') }
 
   include ApplicationHelper, ActionView::Helpers::TextHelper
 
@@ -67,8 +68,9 @@ class Plaque < ApplicationRecord
   end
 
   def full_address
-    a = address
-    a += ", " + area.name + ", " + area.country&.name if area
+    a = address ||+ ''
+    a += ", " + area&.name if area
+    a += ", " + area.country&.name if area
     a
   end
 
@@ -105,13 +107,22 @@ class Plaque < ApplicationRecord
   end
 
   def people
-    people = Array.new
-    personal_connections.each do |personal_connection|
-      if personal_connection.person != nil && personal_connection.person.name != ""
-        people << personal_connection.person
+    if self.id
+      sql = "select distinct people.*
+        from personal_connections as pc_main
+        inner join people on people.id = pc_main.person_id
+        where pc_main.plaque_id = #{self.id}"
+      @people ||= Person.find_by_sql(sql)
+    else
+      # not been saved yet
+      people = Array.new
+      personal_connections.each do |personal_connection|
+        if personal_connection.person != nil && personal_connection.person.name != ""
+          people << personal_connection.person
+        end
       end
+      people.uniq
     end
-    return people.uniq
   end
 
   def subjects
@@ -247,20 +258,15 @@ class Plaque < ApplicationRecord
   end
 
   def main_photo
-    @main_photo ||= photos.first
+    @main_photo ||= photos.first&.preferred_clone? ? photos.first : photos.second
   end
 
   def other_photos
     others = []
-    clones = []
-    clones << main_photo.clone_id if main_photo&.clone_id
     photos.each do |p|
-      if !clones.include?(p.id)
-        clones << p.clone_id if p.clone_id
-        others << p if p != main_photo
-      end
+      others << p if p != main_photo && p.preferred_clone?
     end
-    others
+    others.uniq
   end
 
   def main_photo_reverse
@@ -281,13 +287,26 @@ class Plaque < ApplicationRecord
   end
 
   def see_also
-    also = []
-    people.each do |person|
-      person.plaques.each do |plaque|
-        also << plaque unless plaque == self
-      end
+    if self.id
+      sql = "select distinct
+        plaques.id,
+        plaques.inscription,
+        plaques.area_id,
+        plaques.latitude,
+        plaques.longitude
+        from personal_connections as pc_main
+        inner join personal_connections as pc_related
+           on pc_related.person_id = pc_main.person_id
+        inner join plaques on plaques.id = pc_related.plaque_id
+        where pc_main.plaque_id = #{self.id}
+          and pc_related.plaque_id != #{self.id}"
+      @related_plaques ||= Plaque.find_by_sql(sql)
+      ActiveRecord::Associations::Preloader.new.preload(@related_plaques, [:photos, :area])
+      @related_plaques
+    else
+      # not been saved yet
+      []
     end
-	  return also.inject([]){|s,e| s | [e] }
   end
 
   def inscription_preferably_in_english
@@ -302,21 +321,18 @@ class Plaque < ApplicationRecord
   end
 
   def translate
-    if foreign? && inscription_in_english.blank? && language.alpha2 == "de"
-      in_english = inscription
-      in_english = in_english.gsub('Hier wohnte','Here lived')
-      in_english = in_english.gsub('jg.','born')
-      in_english = in_english.gsub('deportiert','deported')
-      in_english = in_english.gsub('Deportiert','deported')
-      in_english = in_english.gsub('ermordet','murdered')
-      in_english = in_english.gsub('Ermordet','murdered')
-      in_english = in_english.gsub('geb.','nee')
-      in_english = in_english.gsub('geb.','nee')
-      in_english = in_english.gsub('geb.','nee')
-      in_english = in_english.gsub('geb.','nee')
-      in_english = in_english.gsub('flucht','escaped')
-      in_english = in_english.gsub('interniert','interned')
-      self.inscription_in_english = in_english
+    if foreign? && inscription_in_english.blank?
+      begin
+        client = Aws::Translate::Client.new(region: 'eu-west-1')
+        resp = client.translate_text({
+          text: "#{inscription}",
+          source_language_code: "#{language.alpha2}",
+          target_language_code: "en",
+        })
+        self.inscription_in_english = "#{resp.translated_text} [AWS Translate]"
+      rescue
+        puts("plaque #{id} failed to translate")
+      end
     end
   end
 
@@ -416,6 +432,13 @@ class Plaque < ApplicationRecord
       x = ((lng_deg + 180.0) / 360.0 * n).to_i
       y = ((1.0 - Math::log(Math::tan(lat_rad) + (1 / Math::cos(lat_rad))) / Math::PI) / 2.0 * n).to_i
       {x: x, y: y}
+    end
+
+    def unshout
+      if self.inscription && self.inscription&.upcase == self.inscription
+        # it is all in CAPITALS, I AM SHOUTING
+        self.inscription = self.inscription.capitalize
+      end
     end
 
 end

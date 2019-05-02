@@ -1,25 +1,21 @@
 # -*- encoding : utf-8 -*-
 # A photograph of a plaque or a subject.
-#
 # === Attributes
-# * +photographer+ - The name of the photographer
-# * +url+ - The primary stable webpage for the photo
-# * +created_at+
-# * +updated_at+
+# * +description+ - Extra information about what this is a photo of (used if not linked to a plaque)
 # * +file_url+ - A link to the actual digital photo file.
-# * +photographer_url+ - A link to a webpage for the photographer
-# * +taken_at+ - Date and time if known
-# * +shot+ - Types of framing technique. One of "extreme close up", "close up", "medium close up", "medium shot", "long shot", "establishing shot"
-# * +of_a_plaque+ - whether this is actually a photo of a plaque (and not, for example, mistakenly labelled on Wikimedia as one)
 # * +latitude+ - Optional
 # * +longitude+ - Optional
+# * +of_a_plaque+ - whether this is actually a photo of a plaque (and not, for example, mistakenly labelled on Wikimedia as one)
+# * +photographer+ - The name of the photographer
+# * +photographer_url+ - A link to a webpage for the photographer
+# * +shot+ - Types of framing technique. One of "extreme close up", "close up", "medium close up", "medium shot", "long shot", "establishing shot"
 # * +subject+ - What we think this is a photo of (used if not linked to a plaque)
-# * +description+ - Extra information about what this is a photo of (used if not linked to a plaque)
+# * +taken_at+ - Date and time if known
 # * +thumbnail+ - A link to a thumbnail image if there is one
+# * +url+ - The primary stable webpage for the photo
 require 'wikimedia/commoner'
 
 class Photo < ApplicationRecord
-
   belongs_to :plaque, counter_cache: true, optional: true
   belongs_to :person, optional: true
   belongs_to :licence, counter_cache: true, optional: true
@@ -29,8 +25,8 @@ class Photo < ApplicationRecord
   validates_presence_of :file_url
   validate :unique_file_url, on: :create
   after_update :reset_plaque_photo_count
-  before_save :geograph_data
-  before_save :https_flickr_urls
+  before_save :populate
+  before_save :https_urls
   before_save :merge_known_photographer_names
   before_save :nearest_plaque
   before_save :set_of_a_plaque
@@ -124,90 +120,10 @@ class Photo < ApplicationRecord
     return "https://commons.wikimedia.org/wiki/Special:FilePath/#{wikimedia_filename}?width=250" if wikimedia?
   end
 
-  def wikimedia_data
-    if wikimedia?
-      begin
-        wikimedia = Wikimedia::Commoner.details("File:#{wikimedia_filename}")
-        if wikimedia[:description] == 'missing'
-          errors.add :file_url, "cannot find File:#{wikimedia_filename} on Wikimedia Commons"
-        else
-          self.url = wikimedia[:page_url]
-          self.subject = wikimedia[:description].gsub("English: ","")
-          self.photographer = wikimedia[:author]
-          self.photographer_url = wikimedia[:author_url]
-          self.file_url = wikimedia_special
-          licence = Licence.find_by(url: wikimedia[:licence_url])
-          if (licence == nil)
-            wikimedia[:licence_url] += "/" if !wikimedia[:licence_url].ends_with? '/'
-            licence = Licence.find_by_url wikimedia[:licence_url]
-            if (licence == nil)
-              licence = Licence.new(name: wikimedia[:licence], url: wikimedia[:licence_url])
-              licence.save
-            end
-          end
-          self.licence = licence if licence != nil
-          self.latitude = wikimedia[:latitude] if wikimedia[:latitude]
-          self.longitude = wikimedia[:longitude] if wikimedia[:longitude]
-        end
-      rescue
-        errors.add :file_url, 'Commoner errored'
-      end
-    end
-    if geograph?
-      query_url = "http://api.geograph.org.uk/api/oembed?&&url=#{self.url}&output=json"
-      response = open(query_url)
-      resp = response.read
-      parsed_json = JSON.parse(resp)
-      self.photographer = parsed_json['author_name']
-      self.photographer_url = parsed_json['author_url'].gsub("http:","https:")
-      self.thumbnail = parsed_json['thumbnail_url'].gsub("http:","https:")
-      self.file_url = parsed_json['url'].gsub("http:","https:")
-      self.licence = Licence.find_by_url(parsed_json['license_url'])
-      self.subject = parsed_json['title'][0,255] if parsed_json['title']
-      self.description = parsed_json['description'] if parsed_json['description']
-      self.latitude = parsed_json['geo']['lat'] if parsed_json['geo']
-      self.longitude = parsed_json['geo']['long'] if parsed_json['geo']
-    end
-    if flickr?
-      flickr_photo_id = Photo.flickr_photo_id(url)
-      if flickr_photo_id
-        key = "86c115028094a06ed5cd19cfe72e8f8b"
-        q_url = "https://api.flickr.com/services/rest/?api_key=#{key}&format=json&nojsoncallback=1&method=flickr.photos.getInfo&photo_id=#{flickr_photo_id}"
-        puts "Flickr: #{q_url}"
-        begin
-          response = open(q_url)
-        rescue # random 502 bad gateway from Flickr
-          sleep(5)
-          response = open(q_url)
-        end
-        resp = response.read
-        parsed_json = JSON.parse(resp)
-        if parsed_json['stat'] == 'fail'
-          errors.add(:file_url, "photo removed from Flickr")
-          return
-        end
-        parsed_json = parsed_json['photo']
-        self.url = parsed_json['urls']['url'][0]['_content']
-        self.file_url = "https://farm#{parsed_json['farm']}.staticflickr.com/#{parsed_json['server']}/#{parsed_json['id']}_#{parsed_json['secret']}_z.jpg"
-        self.photo_url = "https://www.flickr.com/photos/#{parsed_json['owner']['path_alias']}/#{parsed_json['id']}/"
-        self.photographer = parsed_json['owner']['realname']
-        self.photographer = parsed_json['owner']['username'] if self.photographer.empty?
-        p_id = parsed_json['owner']['path_alias'] ? parsed_json['owner']['path_alias'] : parsed_json['owner']['nsid']
-        self.photographer_url = "https://www.flickr.com/photos/#{p_id}/"
-        self.licence = Licence.find_by_flickr_licence_id(parsed_json['license'])
-        self.subject = parsed_json['title']['_content'].gsub("TxHM","").gsub("Historical Marker","").gsub("Marker","")[0,255]
-        self.description = parsed_json['description']['_content']
-        self.latitude = parsed_json['location']['latitude'] if parsed_json['location']
-        self.longitude = parsed_json['location']['longitude'] if parsed_json['location']
-        self.taken_at = parsed_json['dates']['taken'] if parsed_json['dates']
-        if self.plaque_id == nil && parsed_json['tags']
-          parsed_json['tags']['tag'].each do |tag|
-            machine_tag_id = tag['raw'].match(/openplaques:id=(\d*)/)
-            self.plaque_id = machine_tag_id[1] if machine_tag_id
-          end
-        end
-      end
-    end
+  def populate
+    wikimedia_data
+    geograph_data
+    flickr_data
   end
 
   def match
@@ -259,6 +175,14 @@ class Photo < ApplicationRecord
     end
   end
 
+  def cloned?
+    self.clone_id && self.clone_id > 0
+  end
+
+  def preferred_clone?
+    cloned? ? !flickr? : true
+  end
+
   def as_json(options={})
     options =
     {
@@ -299,11 +223,12 @@ class Photo < ApplicationRecord
 
   private
 
-    def https_flickr_urls
-      if flickr?
-        self.url = self.url.gsub("http:","https:")
-        self.file_url = self.file_url.gsub("http:","https:")
-        self.photographer_url = self.photographer_url.gsub("http:","https:")
+    def https_urls
+      if flickr? || geograph? || wikimedia?
+        self.url = self.url&.gsub("http:","https:")
+        self.file_url = self.file_url&.gsub("http:","https:")
+        self.thumbnail = self.thumbnail&.gsub("http:","https:")
+        self.photographer_url = self.photographer_url&.gsub("http:","https:")
       end
     end
 
@@ -318,9 +243,106 @@ class Photo < ApplicationRecord
       end
     end
 
+    def new?
+      self.file_url.blank?
+    end
+
+    def wikimedia_data
+      if wikimedia? && new?
+        begin
+          wikimedia = Wikimedia::Commoner.details("File:#{wikimedia_filename}")
+          if wikimedia[:description] == 'missing'
+            errors.add :file_url, "cannot find File:#{wikimedia_filename} on Wikimedia Commons"
+          else
+            self.url = wikimedia[:page_url]
+            self.subject = wikimedia[:description].gsub("English: ","")
+            self.photographer = wikimedia[:author]
+            self.photographer_url = wikimedia[:author_url]
+            self.file_url = wikimedia_special
+            if wikimedia[:licence_url]
+              licence = Licence.find_by(url: wikimedia[:licence_url])
+              unless licence
+                wikimedia[:licence_url] += "/" if !wikimedia[:licence_url].ends_with? '/'
+                licence = Licence.find_by_url wikimedia[:licence_url]
+                unless licence
+                  if wikimedia[:licence]
+                    licence = Licence.new(
+                      name: wikimedia[:licence],
+                      url: wikimedia[:licence_url]
+                    )
+                    licence.save
+                  end
+                end
+              end
+              self.licence = licence if licence != nil
+            end
+            self.latitude = wikimedia[:latitude] if wikimedia[:latitude]
+            self.longitude = wikimedia[:longitude] if wikimedia[:longitude]
+          end
+        rescue RuntimeError => ex
+          errors.add :file_url, 'Commoner errored' + ex.full_messages
+        end
+      end
+    end
+
     def geograph_data
-      if geograph? && !geolocated?
-        wikimedia_data
+      if geograph? && new?
+        query_url = "http://api.geograph.org.uk/api/oembed?&&url=#{self.url}&output=json"
+        response = open(query_url)
+        resp = response.read
+        parsed_json = JSON.parse(resp)
+        self.photographer = parsed_json['author_name']
+        self.photographer_url = parsed_json['author_url'].gsub("http:","https:")
+        self.thumbnail = parsed_json['thumbnail_url'].gsub("http:","https:")
+        self.file_url = parsed_json['url'].gsub("http:","https:")
+        self.licence = Licence.find_by_url(parsed_json['license_url'])
+        self.subject = parsed_json['title'][0,255] if parsed_json['title']
+        self.description = parsed_json['description'] if parsed_json['description']
+        self.latitude = parsed_json['geo']['lat'] if parsed_json['geo']
+        self.longitude = parsed_json['geo']['long'] if parsed_json['geo']
+      end
+    end
+
+    def flickr_data
+      if flickr? && new?
+        flickr_photo_id = Photo.flickr_photo_id(url)
+        if flickr_photo_id
+          key = "86c115028094a06ed5cd19cfe72e8f8b"
+          q_url = "https://api.flickr.com/services/rest/?api_key=#{key}&format=json&nojsoncallback=1&method=flickr.photos.getInfo&photo_id=#{flickr_photo_id}"
+          puts "Flickr: #{q_url}"
+          begin
+            response = open(q_url)
+          rescue # random 502 bad gateway from Flickr
+            sleep(5)
+            response = open(q_url)
+          end
+          resp = response.read
+          parsed_json = JSON.parse(resp)
+          if parsed_json['stat'] == 'fail'
+            errors.add(:file_url, "photo removed from Flickr")
+            return
+          end
+          parsed_json = parsed_json['photo']
+          self.url = parsed_json['urls']['url'][0]['_content']
+          self.file_url = "https://farm#{parsed_json['farm']}.staticflickr.com/#{parsed_json['server']}/#{parsed_json['id']}_#{parsed_json['secret']}_z.jpg"
+          self.photo_url = "https://www.flickr.com/photos/#{parsed_json['owner']['path_alias']}/#{parsed_json['id']}/"
+          self.photographer = parsed_json['owner']['realname']
+          self.photographer = parsed_json['owner']['username'] if self.photographer.empty?
+          p_id = parsed_json['owner']['path_alias'] ? parsed_json['owner']['path_alias'] : parsed_json['owner']['nsid']
+          self.photographer_url = "https://www.flickr.com/photos/#{p_id}/"
+          self.licence = Licence.find_by_flickr_licence_id(parsed_json['license'])
+          self.subject = parsed_json['title']['_content'].gsub("TxHM","").gsub("Historical Marker","").gsub("Marker","")[0,255]
+          self.description = parsed_json['description']['_content']
+          self.latitude = parsed_json['location']['latitude'] if parsed_json['location']
+          self.longitude = parsed_json['location']['longitude'] if parsed_json['location']
+          self.taken_at = parsed_json['dates']['taken'] if parsed_json['dates']
+          if self.plaque_id == nil && parsed_json['tags']
+            parsed_json['tags']['tag'].each do |tag|
+              machine_tag_id = tag['raw'].match(/openplaques:id=(\d*)/)
+              self.plaque_id = machine_tag_id[1] if machine_tag_id
+            end
+          end
+        end
       end
     end
 
@@ -351,8 +373,8 @@ class Photo < ApplicationRecord
     end
 
     def set_of_a_plaque
-      self.of_a_plaque = false if person_id != nil
-      self.of_a_plaque = true if plaque_id != nil
+      self.of_a_plaque = false if person_id != nil && person_id != 0
+      self.of_a_plaque = true if plaque_id != nil && plaque_id != 0
     end
 
 end

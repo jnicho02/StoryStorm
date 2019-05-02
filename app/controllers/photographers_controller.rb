@@ -1,7 +1,22 @@
 class PhotographersController < ApplicationController
 
   def index
-    @photographers = Photographer.all
+    @photographers_count = Photographer.all.count
+    @photographers = Photographer.top50
+    description = 'Photographers of blue plaques'
+    set_meta_tags noindex: true
+    set_meta_tags description: description
+      set_meta_tags open_graph: {
+        type: :website,
+        url: url_for(only_path: false),
+        title: 'Plaque hunters',
+        description: description,
+      }
+      set_meta_tags twitter: {
+        card: 'summary_large_image',
+        site: '@openplaques',
+        title: description,
+      }
     respond_to do |format|
       format.html
       format.json { render json: @photographers }
@@ -11,6 +26,7 @@ class PhotographersController < ApplicationController
   def show
     @photographer = Photographer.new
     @photographer.id = params[:id].gsub(/\_/,'.')
+    set_meta_tags nofollow: true
     respond_to do |format|
       format.html
       format.json { render json: @photographer }
@@ -26,15 +42,11 @@ class PhotographersController < ApplicationController
     @photographer = params[:flickr_url]
     @photographer.gsub!('http://www.flickr.com/photos/','')
     @photographer.gsub!(/\/.*/,'')
-    help.find_photo_by_machinetag(nil, @photographer)
+    Helper.instance.find_photo_by_machinetag(nil, @photographer)
     redirect_to photographers_path
   end
 
   protected
-
-    def help
-      Helper.instance
-    end
 
     class Helper
       include Singleton

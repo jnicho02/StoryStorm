@@ -18,7 +18,7 @@
     <% end %>
   <% end %>
   <div class="card-block">
-    <h7 class="card-title"><%= linked_inscription(plaque) %></h7>
+    <h7 class="card-title"><% if plaque.foreign? %><span class="flag-icon <%= plaque.language&.flag_icon %>"></span><% end %><%= linked_inscription(plaque) %></h7>
     <% if plaque.foreign? && plaque.inscription_in_english %>
       <p id="inscription-in-english" class="card-text"><small><%= plaque.inscription_in_english %></small></p>
     <% end %>
@@ -26,7 +26,7 @@
       <small>
         <%= plaque.address %>, <%= link_to(plaque.area.name, area_path(plaque.area)) if plaque.area %>, <%= plaque.area.country.name if plaque.area %>
         <% if @person %> where <%= @person.personal_pronoun %> <%= verbs(@person,plaque).to_sentence.html_safe %><% end %>
-        <% '. As far as we know, it is not currently on display.' if !plaque.is_current %>
+        <% '. As far as we know, it is not currently on display.' unless plaque.is_current %>
       </small>
     </p>
   </div>

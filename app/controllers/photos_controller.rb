@@ -23,21 +23,13 @@ class PhotosController < ApplicationController
   end
 
   def update
-    if (params[:streetview_url] && params[:streetview_url]!='')
-      point = help.geolocation_from params[:streetview_url]
-      if !point.latitude.blank? && !point.longitude.blank?
-        params[:photo][:latitude] = point.latitude
-        params[:photo][:longitude] = point.longitude
-      end
-    end
     respond_to do |format|
       if @photo.update_attributes(photo_params)
         flash[:notice] = 'Photo was successfully updated.'
-        format.html { redirect_back(fallback_location: root_path) }
       else
         flash[:notice] = @photo.errors
-        format.html { render "edit" }
       end
+      format.html { redirect_back(fallback_location: root_path) }
     end
   end
 
@@ -47,9 +39,10 @@ class PhotosController < ApplicationController
 
   def create
     @photo = Photo.new(photo_params)
-    @photo.wikimedia_data
+    @photo.populate
     if @photo.errors.empty?
       @already_existing_photo = Photo.find_by_file_url @photo.file_url
+      @already_existing_photo = Photo.find_by_file_url(@photo.file_url.gsub("https","http")) if !@already_existing_photo
       if @already_existing_photo
         @photo = @already_existing_photo
         @photo.update_attributes(photo_params)

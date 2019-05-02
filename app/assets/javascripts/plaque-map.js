@@ -79,10 +79,13 @@ function initmap()
     L.Icon.Default.imagePath = '/assets';
     map = L.map('plaque-map');
     map.scrollWheelZoom.disable();
-    var basemap = new L.StamenTileLayer("toner"); // toner, terrain, or watercolor
+    var basemap = L.tileLayer('https://maps.tilehosting.com/styles/basic/{z}/{x}/{y}.png?key=qSorA16cJhhBZEhqDisF', {
+    	maxZoom: 19,
+    	attribution: '&copy; <a href="http://www.openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+    });
     map.addLayer(basemap);
     var latitude = plaque_map.attr("data-latitude"), longitude = plaque_map.attr("data-longitude"), zoom = plaque_map.attr("data-zoom");
-    var zoom_level = 13;
+    var zoom_level = 14;
     if (zoom)
     {
       zoom_level = parseInt(zoom);
@@ -101,19 +104,19 @@ function initmap()
 
     clusterer = new L.MarkerClusterGroup(
     {
-      maxClusterRadius : 25,
-      showCoverageOnHover : false,
+      maxClusterRadius : 250,
+      showCoverageOnHover : true,
       iconCreateFunction: function(cluster)
       {
         return new L.DivIcon(
         {
           html: cluster.getChildCount(),
-          className : 'plaque-cluster-marker ' + clusterSize(cluster.getChildCount()),
+          className : 'marker-cluster-' + clusterSize(cluster.getChildCount()),
           iconSize: clusterWidth(cluster.getChildCount())
         });
       }
     });
-    map.addLayer(clusterer);
+//    map.addLayer(clusterer);
 
     var data_view = plaque_map.attr("data-view");
     if (data_view === "one")
@@ -157,7 +160,7 @@ function initmap()
                   var plaque_icon = new L.DivIcon({ className: 'plaque-marker', html: '', iconSize : 16 });
                   layer.setIcon(plaque_icon);
                   plaques["'#"+plaque.id+"'"] = plaque;
-                  clusterer.addLayer(layer);
+                  map.addLayer(layer);
                 }
               }
             }

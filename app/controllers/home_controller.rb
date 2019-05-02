@@ -1,8 +1,8 @@
 class HomeController < ApplicationController
   def index
     @plaques_count = Plaque.count
-    @plaques = Plaque.photographed.order('random()').limit(12)
-    if Date.today == "2018-03-08".to_date
+    @plaques = Plaque.photographed.order(Arel.sql('random()')).limit(12)
+    if Date.today == '2019-03-08'.to_date
       @famous_women = Person
         .connected
         .female
@@ -16,16 +16,16 @@ class HomeController < ApplicationController
       set_meta_tags open_graph: {
         type: :website,
         url: url_for(only_path: false),
-        image: view_context.root_url[0...-1] + view_context.image_path("openplaques.png"),
-        title: "Open Plaques",
-        description: "Documenting the historical links between people and places, as recorded by commemorative plaques",
+        image: view_context.root_url[0...-1] + view_context.image_path('openplaques.png'),
+        title: 'Open Plaques',
+        description: 'Documenting the historical links between people and places, as recorded by commemorative plaques',
       }
       set_meta_tags twitter: {
-        card: "summary_large_image",
-        site: "@openplaques",
-        title: "Open Plaques",
+        card: 'summary_large_image',
+        site: '@openplaques',
+        title: 'Open Plaques',
         image: {
-          _: @todays.main_photo ? @todays.main_photo.file_url : view_context.root_url[0...-1] + view_context.image_path("openplaques.png"),
+          _: @todays.main_photo ? @todays.main_photo.file_url : view_context.root_url[0...-1] + view_context.image_path('openplaques.png'),
           width: 100,
           height: 100,
         }
@@ -37,7 +37,7 @@ class HomeController < ApplicationController
   def gc
     puts '*** run garbage collection'
     heap_live_slots_before = GC.stat(:heap_live_slots)
-    total_allocated_object_before = GC.stat(:total_allocated_object)
+    total_allocated_object_before = GC.stat(:total_allocated_objects)
     GC.start
     heap_live_slots_after = GC.stat(:heap_live_slots)
     difference = heap_live_slots_before - heap_live_slots_after
@@ -48,7 +48,7 @@ class HomeController < ApplicationController
       'heap_live_slots after' => heap_live_slots_after.to_s,
       'difference' => difference.to_s,
       'total_allocated_object before' => total_allocated_object_before.to_s,
-      'total_allocated_object after' => GC.stat(:total_allocated_object).to_s
+      'total_allocated_object after' => GC.stat(:total_allocated_objects).to_s
     }, status: :ok
   end
 end

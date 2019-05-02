@@ -5,6 +5,7 @@ en-GB:
   activerecord:
     models:
       area: Area
+      photo: Photo
     attributes:
       area:
         name: Name
@@ -113,6 +114,8 @@ en-GB:
   data_about_this_thing_as: Data available about this %{thing} as
   data_about_things_as: Data available about these as
   unphotographed_plaques: unphotographed plaques
+  find_on_google_maps_html: <a href="http://maps.google.co.uk/maps?q=%{q}&z=18" target="_new">Google Street View</a> url
+  must_be_underscored: lowercase with underscores (will autogenerate given blank)
 
   home:
     contribute:
@@ -146,14 +149,11 @@ en-GB:
     edit:
       page_title: Edit %{area}
       page_heading_html: Edit %{area}
-      find_on_google_maps_html: Find on <a href="http://maps.google.co.uk/maps?q=%{area}&z=18" target="_new">Google Maps</a>
       geolocation: Geolocation
       google_streetview_url: Google Streetview url
-      must_be_underscored: must be lowercase with underscores
     new:
       page_title: New area in %{country}
       page_heading_html: New area in %{country}
-      must_be_underscored: must be lowercase with underscores
     show:
       page_title: Area %{area}
       page_heading_html: Show %{area}
@@ -163,6 +163,10 @@ en-GB:
         page_title: Plaques in %{area}
         page_title_unphotographed: Unphotographed plaques in %{area}
         plaques: plaques
+    subjects:
+      show:
+        page_title: Plaque subjects in %{area}
+        page_heading: subjects
 
   colours:
     index:
@@ -187,6 +191,14 @@ en-GB:
     show:
       page_title: Historical plaques in %{country}
       page_heading: Historical plaques in %{country}
+    plaques:
+      show:
+        page_title: "%{country} plaques"
+        page_heading: plaques
+    subjects:
+      top:
+        page_title: "%{country} subjects"
+        page_heading: subjects
 
   errors:
     not_found:
@@ -243,12 +255,15 @@ en-GB:
       note_about_description: is displayed on the page
       note_about_notes: is for internal use only
     show:
-      page_title: Organisation %{organisation}
+      page_title: "%{organisation}"
       page_heading: Organisation - %{organisation}
     plaques:
       show:
-        page_title: Organisation %{organisation}
-        page_heading: Organisation - %{organisation}
+        page_title: "%{organisation} plaques"
+    subjects:
+      show:
+        page_title: Plaque subjects from %{organisation}
+        page_heading: subjects
 
   pages:
     edit:
@@ -285,7 +300,7 @@ en-GB:
       page_heading: New person/thing/place
       page_subhead: Search carefully on things like just the surname before creating a potential duplicate. For common place names like gates/pubs/cinemas use comma + city name, e.g. 'North Gate, Durham'. Rename dupes to 'xxxx's for later deletion.
     show:
-      page_title: Historical plaques about %{person}
+      page_title: "%{person}"
       commemorated_on:
         one: Commemorated on %{count} plaque
         other: Commemorated on %{count} plaques
@@ -324,8 +339,8 @@ en-GB:
 
   photographers:
     index:
-      page_title: Photographers
-      page_heading: Photographers
+      page_title: Plaque hunters
+      page_heading: Plaque hunters
       the_top_50: Top 50
       how_many: StoryStorm Plaques links to photographs on the internet taken by %{count} photographers.
       where: These images are held on Flickr, Wikimedia Commons, and Geograph.

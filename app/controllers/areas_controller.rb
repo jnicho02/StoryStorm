@@ -2,8 +2,9 @@ class AreasController < ApplicationController
 
   before_action :authenticate_admin!, only: :destroy
   before_action :authenticate_user!, except: [:autocomplete, :index, :show, :update]
-  before_action :find_country, only: [:index, :new, :show, :create, :edit, :update, :destroy]
-  before_action :find, only: [:show, :edit, :update, :destroy]
+  before_action :find_country, only: [:index, :new, :show, :create, :edit, :update, :destroy, :geolocate]
+  before_action :find, only: [:show, :edit, :update, :destroy, :geolocate]
+  before_action :streetview_to_params, only: :update
 
   def index
     @areas = @country.areas.all
@@ -26,7 +27,7 @@ class AreasController < ApplicationController
         @areas = Area.select(:id,:name,:country_id).where(country_id: country_id).name_starts_with(params[:starts_with]).includes(:country).limit(limit)
       end
     else
-      @areas = "{}"
+      @areas = '{}'
     end
     render json: @areas.as_json(
       only: [:id,:name,:country_id],
@@ -51,7 +52,7 @@ class AreasController < ApplicationController
   end
 
   def create
-    @area = @country.areas.new(area_params)
+    @area = @country.areas.new(permitted_params)
     if @area.save
       redirect_to country_area_path(@area.country_alpha2, @area.slug)
     else
@@ -59,7 +60,6 @@ class AreasController < ApplicationController
     end
   end
 
-  # DELETE /areas/aa
   def destroy
     @area.destroy
     redirect_to country_path(@country)
@@ -70,26 +70,20 @@ class AreasController < ApplicationController
   end
 
   def update
-    if (params[:streetview_url])
-      point = help.geolocation_from params[:streetview_url]
-      if !point.latitude.blank? && !point.longitude.blank?
-        params[:area][:latitude] = point.latitude.to_s
-        params[:area][:longitude] = point.longitude.to_s
-      end
-    end
-    if @area.update!(area_params)
+    if @area.update!(permitted_params)
       flash[:notice] = 'Area was successfully updated.'
     end
     redirect_back(fallback_location: root_path)
   end
 
-  def help
-    Helper.instance
-  end
-
-  class Helper
-    include Singleton
-    include PlaquesHelper
+  def geolocate
+    unless @area.geolocated?
+      @mean = Helper.instance.find_mean(@area.plaques.geolocated.random.limit(50))
+      @area.latitude = @mean.latitude
+      @area.longitude = @mean.longitude
+      @area.save
+    end
+    redirect_back(fallback_location: root_path)
   end
 
   protected
@@ -100,23 +94,33 @@ class AreasController < ApplicationController
 
     def find
       @area = @country.areas.find_by_slug!(params[:id])
-      if !@area.geolocated?
-        @area.find_centre
-        @area.save if (@area.plaques.geolocated.size > 3)
+    end
+
+    class Helper
+      include Singleton
+      include PlaquesHelper
+    end
+
+    def streetview_to_params
+      if params[:streetview_url]
+        point = Helper.instance.geolocation_from params[:streetview_url]
+        unless point.latitude.blank? || point.longitude.blank?
+          params[:area][:latitude] = point.latitude.to_s
+          params[:area][:longitude] = point.longitude.to_s
+        end
       end
     end
 
   private
 
-    def area_params
+    def permitted_params
       params.require(:area).permit(
-        :name,
-        :slug,
         :country_id,
         :latitude,
         :longitude,
+        :name,
+        :slug,
         :streetview_url,
-        :country_id)
-	   end
-
+      )
+	  end
 end

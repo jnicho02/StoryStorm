@@ -12,10 +12,10 @@ class PeopleController < ApplicationController
             @people = Person.send(params[:filter].to_s).paginate(page: params[:page], per_page: 50)
             @display = params[:filter].to_s
           rescue # an unrecognised filter method
-            redirect_to(controller: :people_by_index, action: "show", id: "a")
+            redirect_to(controller: :people_by_index, action: :show, id: :a)
           end
         else
-          redirect_to(controller: :people_by_index, action: "show", id: "a")
+          redirect_to(controller: :people_by_index, action: :show, id: :a)
         end
       }
       format.csv {
@@ -33,13 +33,17 @@ class PeopleController < ApplicationController
   def autocomplete
     limit = params[:limit] ? params[:limit] : 5
     @people = "{}"
-    @people = Person.select(:id,:name,:born_on,:died_on)
+    @people = Person.select(:born_on, :died_on, :gender, :id, :name)
+      .includes(:roles)
+      .name_is(params[:contains])
+      .limit(limit) if params[:contains]
+    @people = @people + Person.select(:born_on, :died_on, :gender, :id, :name)
       .includes(:roles)
       .name_contains(params[:contains])
       .limit(limit) if params[:contains]
-    render json: @people.as_json(
+    render json: @people.uniq.as_json(
       only: [:id, :name],
-      methods: [:name_and_dates]
+      methods: [:name_and_dates, :type]
     )
   end
 
@@ -50,19 +54,20 @@ class PeopleController < ApplicationController
       redirect_to(controller: :people, action: "index", filter: params[:id]) and return
     end
     begin
+      set_meta_tags description: "#{@person.name_and_dates} historical plaques and markers"
       set_meta_tags open_graph: {
         type: :website,
-        url: url_for(:only_path=>false),
+        url: url_for(only_path: false),
         image: @person.main_photo ? @person.main_photo.file_url : view_context.root_url[0...-1] + view_context.image_path("openplaques.png"),
-        title: "#{@person.full_name} historical plaques and markers",
-        description: @person.full_name,
+        title: "#{@person.name_and_dates} historical plaques and markers",
+        description: @person.name_and_dates,
       }
       set_meta_tags twitter: {
-        card: "summary_large_image",
-        site: "@openplaques",
-        title: "#{@person.full_name} historical plaques and markers",
+        card: 'summary_large_image',
+        site: '@openplaques',
+        title: "#{@person.name_and_dates} historical plaques and markers",
         image: {
-          _: @person.main_photo ? @person.main_photo.file_url : view_context.root_url[0...-1] + view_context.image_path("openplaques.png"),
+          _: @person.main_photo ? @person.main_photo.file_url : view_context.root_url[0...-1] + view_context.image_path('openplaques.png'),
           width: 100,
           height: 100,
         }
@@ -100,9 +105,9 @@ class PeopleController < ApplicationController
   end
 
   def create
-    params[:person][:born_on] += "-01-01" if params[:person][:born_on] =~/\d{4}/
-    params[:person][:died_on] += "-01-01" if params[:person][:died_on] =~/\d{4}/
-    @person = Person.new(person_params)
+    params[:person][:born_on] += '-01-01' if params[:person][:born_on] =~/\d{4}/
+    params[:person][:died_on] += '-01-01' if params[:person][:died_on] =~/\d{4}/
+    @person = Person.new(permitted_params)
     respond_to do |format|
       if @person.save
         if params[:role_id] && !params[:role_id].blank?
@@ -115,22 +120,22 @@ class PeopleController < ApplicationController
         format.html { redirect_to(@person) }
         format.xml  { render xml: @person, status: :created, location: @person }
       else
-        format.html { render "new" }
+        format.html { render 'new' }
         format.xml  { render xml: @person.errors, status: :unprocessable_entity }
       end
     end
   end
 
   def update
-    params[:person][:born_on] += "-01-01" if params[:person][:born_on] =~/\d{4}/
-    params[:person][:died_on] += "-01-01" if params[:person][:died_on] =~/\d{4}/
+    params[:person][:born_on] += '-01-01' if params[:person][:born_on] =~/\d{4}/
+    params[:person][:died_on] += '-01-01' if params[:person][:died_on] =~/\d{4}/
     respond_to do |format|
-      if @person.update_attributes(person_params)
+      if @person.update_attributes(permitted_params)
         flash[:notice] = 'Person was successfully updated.'
         format.html { redirect_to(@person) }
         format.xml  { head :ok }
       else
-        format.html { render "edit" }
+        format.html { render 'edit' }
         format.xml  { render xml: @person.errors, status: :unprocessable_entity }
       end
     end
@@ -152,20 +157,26 @@ class PeopleController < ApplicationController
 
   private
 
-    def person_params
+    def aka_to_a
+      cords = params.dig(:person, :aka).presence || "[]"
+      JSON.parse cords
+    end
+
+    def permitted_params
       params.require(:person).permit(
-        :name,
-        :gender,
+        :ancestry_id,
         :aka,
-        :surname_starts_with,
-        :introduction,
-        :wikidata_id,
-        :wikipedia_url,
-        :wikipedia_paras,
-        :dbpedia_uri,
         :born_on,
+        :dbpedia_uri,
         :died_on,
         :find_a_grave_id,
-        :ancestry_id)
+        :gender,
+        :introduction,
+        :name,
+        :surname_starts_with,
+        :wikidata_id,
+        :wikipedia_paras,
+        :wikipedia_url,
+      ).merge({aka: aka_to_a})
     end
 end

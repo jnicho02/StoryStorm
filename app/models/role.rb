@@ -2,7 +2,6 @@
 # These can be professions (eg 'doctor'), occupations ('artist'), or activities ('inventor').
 # === Attributes
 # * +abbreviation+ - acronym etc. when a role is commonly abbreviated, especially awards, e.g. Victoria Cross == VC
-# * +created_at+
 # * +description+
 # * +index+ - letter indexed on
 # * +name+ - what the role is called
@@ -12,12 +11,10 @@
 # * +role_type+ - The classification of the role (see self.types for choice)
 # * +slug+ -
 # * +suffix+ - word(s) to display as part of letters after a name
-# * +updated_at+
 # * +wikidata_id+ - calculated Qnnnnn code, set to 'Q' if not found
 class Role < ApplicationRecord
-
-  has_many :personal_roles, -> { order('started_at') }
-  has_many :people, -> { order("name") }, through: :personal_roles
+  has_many :personal_roles, -> { order(:started_at) }
+  has_many :people, -> { order(:name) }, through: :personal_roles
 
   before_validation :make_slug_not_war
   before_save :update_index

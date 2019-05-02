@@ -1,49 +1,48 @@
 # A subject commemorated on a plaque
 # === Attributes
-# * +name+ - common full name of the person
+# * +aka+ - array of names that person is also known as
+# * +ancestry_id+ - link to Ancestry.com web site
 # * +born_on+ - date on which the person was born [Optional]
+# * +born_on_is_circa+ - true or false. Whether the +born_on+ date is 'circa' or not [Optional]
+# * +dbpedia_uri+ - link to the DBpedia resource representing the person (if one exists).
 # * +died_on+ - The date on which the person died [Optional]
-# * +plaques_count+ - cached count of plaques
-# * +created_at+
-# * +updated_at+
+# * +died_on_is_circa+ - true or false. Whether the +died_on+ date is 'circa' or not [Optional]
+# * +find_a_grave_id+ - link to Find A Grave web site
+# * +gender+ - (u)nkown, (n)ot applicable, (m)ale, (f)emale
+# * +index+
+# * +introduction+ -
+# * +name+ - common full name of the person
 # * +personal_connections_count+ - cached count of associations with plaques, i.e. places and times
 # * +personal_roles_count+ - cached count of roles
-# * +index+
-# * +born_on_is_circa+ - true or false. Whether the +born_on+ date is 'circa' or not [Optional]
-# * +died_on_is_circa+ - true or false. Whether the +died_on+ date is 'circa' or not [Optional]
-# * +wikipedia_url+ - override link to the person's Wikipedia page (if they have one and it isn't linked to via their name).
-# * +dbpedia_uri+ - link to the DBpedia resource representing the person (if one exists).
+# * +plaques_count+ - cached count of plaques
 # * +surname_starts_with+ - letter to index this person on
-# * +introduction+ -
-# * +gender+ - (u)nkown, (n)ot applicable, (m)ale, (f)emale
-# * +aka+ - array of names that person is also known as
-# * +find_a_grave_id+ - link to Find A Grave web site
-# * +ancestry_id+ - link to Ancestry.com web site
+# * +wikidata_id+ - Q-code to match to Wikidata
+# * +wikipedia_url+ - override link to the person's Wikipedia page (if they have one and it isn't linked to via their name).
 class Person < ApplicationRecord
-
-  has_many :personal_roles
-  has_many :personal_connections
+  has_many :personal_roles, dependent: :destroy
   has_many :roles, -> { distinct }, through: :personal_roles
+  has_many :personal_connections, dependent: :destroy
   has_many :plaques, -> { distinct }, through: :personal_connections
-  has_one :birth_connection, -> { where('verb_id in (8,504)') }, class_name: "PersonalConnection"
-  has_one :death_connection, -> { where('verb_id in (3,49,161,1108)') }, class_name: "PersonalConnection"
-  has_one :main_photo, class_name: "Photo"
+  has_one :birth_connection, -> { where('verb_id in (8,504)') }, class_name: 'PersonalConnection'
+  has_one :death_connection, -> { where('verb_id in (3,49,161,1108)') }, class_name: 'PersonalConnection'
+  has_one :main_photo, class_name: 'Photo'
 
   validates_presence_of :name
   before_save :update_index
   before_save :aka_accented_name
   before_save :fill_wikidata_id
   after_save :depiction_from_dbpedia
-  scope :roled, -> { where("personal_roles_count > 0") }
+  scope :roled, -> { where('personal_roles_count > 0') }
   scope :unroled, -> { where(personal_roles_count: [nil,0]) }
-  scope :dated, -> { where("born_on IS NOT NULL or died_on IS NOT NULL") }
-  scope :undated, -> { where("born_on IS NULL and died_on IS NULL") }
+  scope :dated, -> { where('born_on IS NOT NULL or died_on IS NOT NULL') }
+  scope :undated, -> { where('born_on IS NULL and died_on IS NULL') }
   scope :photographed, -> { joins(:main_photo) }
-  scope :unphotographed, -> { where("id not in (select person_id from photos)") }
-  scope :connected, -> { where("personal_connections_count > 0") }
+  scope :unphotographed, -> { where('id not in (select person_id from photos)') }
+  scope :connected, -> { where('personal_connections_count > 0') }
   scope :unconnected, -> { where(personal_connections_count: [nil,0]) }
-  scope :name_starts_with, lambda { |term| where(["lower(name) LIKE ?", term.downcase + "%"]) }
-  scope :name_contains, lambda { |term| where(["lower(name) LIKE ?", "%" + term.downcase + "%"]) }
+  scope :name_starts_with, lambda { |term| where(['lower(name) LIKE ?', term.downcase + '%']) }
+  scope :name_contains, lambda { |term| where(['lower(name) LIKE ?', '%' + term.downcase + '%']) }
+  scope :name_is, lambda { |term| where(['lower(name) = ?', term.downcase]) }
   scope :with_counts, -> {
     select <<~SQL
       people.*,
@@ -55,7 +54,7 @@ class Person < ApplicationRecord
     SQL
   }
   scope :female, -> { where ("gender = 'f'") }
-  scope :random, -> { order('random()') }
+  scope :random, -> { order(Arel.sql('random()')) }
   scope :non_holocaust, -> { joins(:personal_roles).where('personal_roles.role_id != 5375') }
 
   DATE_REGEX = /c?[\d]{4}/
@@ -92,34 +91,34 @@ class Person < ApplicationRecord
   end
 
   def person?
-    !(animal? or thing? or group? or place?)
+    !(animal? || thing? || group? || place?)
   end
 
   def animal?
-    roles.find(&:animal?)
+    roles.find(&:animal?) ? true : false
   end
 
   def thing?
-    roles.find(&:thing?)
+    roles.find(&:thing?) ? true : false
   end
 
   def group?
-    roles.find(&:group?)
+    roles.find(&:group?) ? true : false
   end
 
   def place?
-    roles.find(&:place?)
+    roles.find(&:place?) ? true : false
   end
 
   def type
-    return "man" if person? && male?
-    return "woman" if person? && female?
-    return "person" if person?
-    return "animal" if animal?
-    return "thing" if thing?
-    return "group" if group?
-    return "place" if place?
-    return "?"
+    return 'man' if person? && male?
+    return 'woman' if person? && female?
+    return 'person' if person?
+    return 'animal' if animal?
+    return 'thing' if thing?
+    return 'place' if place?
+    return 'group' if group?
+    return '?'
   end
 
   def born_in
@@ -131,16 +130,16 @@ class Person < ApplicationRecord
   end
 
   def dates
-    dates = ""
+    dates = ''
     if born_in
-      dates = "("
+      dates = '('
       dates << born_in.to_s
       if died_in
         dates << "-#{died_in.to_s}" if (born_in != died_in)
       else
-        dates << (alive? ? "-present" : "-?")
+        dates << (alive? ? '-present' : '-?')
       end
-      dates << ")"
+      dates << ')'
     elsif died_in
       dates = "(d.#{died_in.to_s})"
     end
@@ -163,7 +162,7 @@ class Person < ApplicationRecord
   end
 
   def existence_word
-    alive? ? "is" : "was"
+    alive? ? 'are' : 'were'
   end
 
   def age
@@ -195,7 +194,7 @@ class Person < ApplicationRecord
   end
 
   def wikidata_url
-    "https://www.wikidata.org/wiki/#{wikidata_id}" if wikidata_id && !wikidata_id&.blank? && wikidata_id != "Q"
+    "https://www.wikidata.org/wiki/#{wikidata_id}" if wikidata_id && !wikidata_id&.blank? && wikidata_id != 'Q'
   end
 
   def wikipedia_url
@@ -203,7 +202,7 @@ class Person < ApplicationRecord
   end
 
   def dbpedia_uri
-    wikipedia_url&.gsub("en.wikipedia.org/wiki","dbpedia.org/resource")&.gsub("https","http")
+    wikipedia_url&.gsub('en.wikipedia.org/wiki','dbpedia.org/resource')&.gsub('https','http')
   end
 
   def dbpedia_abstract
@@ -228,7 +227,7 @@ class Person < ApplicationRecord
     @dbpedia_json = nil
     return @dbpedia_json if dbpedia_uri.blank?
     @dbpedia_json = begin
-      api = "#{dbpedia_uri.gsub("resource","data")}.json"
+      api = "#{dbpedia_uri.gsub('resource','data')}.json"
       response = open(api)
       resp = response.read
       JSON.parse(resp)
@@ -245,25 +244,33 @@ class Person < ApplicationRecord
   end
 
   def default_thumbnail_url
-    "/assets/NoPersonSqr.png"
+    '/assets/NoPersonSqr.png'
+  end
+
+  def current_personal_roles
+    current = []
+    personal_roles.each do |pr|
+      current << pr if pr.current?
+    end
+    current.sort! { |b,a| a.role.priority && b.role.priority ? a.role.priority <=> b.role.priority : (a.role.priority ? 1 : -1) }
+    current
   end
 
   def current_roles
-    current_roles = []
-    personal_roles.each do |pr|
-      current_roles << pr.role if pr.current?
+    current = []
+    current_personal_roles.each do |pr|
+      current << pr.role
     end
-    current_roles.sort! { |b,a| a.priority && b.priority ? a.priority <=> b.priority : (a.priority ? 1 : -1) }
-    current_roles
+    current
   end
 
   def title
-    title = ""
-    current_roles.each do |role|
-      if !role.prefix.blank?
+    title = ''
+    current_personal_roles.each do |pr|
+      if !pr.role.prefix.blank?
         # NB a clergyman or Commonwealth citizen does not get called 'Sir'
-        title << "#{role.prefix} " if !title.include?(role.prefix) && !(role.prefix == "Sir" && clergy?)
-      elsif role.used_as_a_prefix? and !title.include?(role.display_name)
+        title << "#{pr.role.prefix} " if !title.include?(pr.role.prefix) && !(pr.role.prefix == 'Sir' && clergy?)
+      elsif pr.role.used_as_a_prefix? and !title.include?(pr.role.display_name)
         title << "#{role.display_name} "
       end
     end
@@ -271,17 +278,20 @@ class Person < ApplicationRecord
   end
 
   def titled?
-    title != ""
+    title != ''
   end
 
   def clergy?
-    roles.any? { |role| role.role_type=="clergy" }
+    roles.any? { |role| role.role_type=='clergy' }
   end
 
   def letters
-    letters = ""
-    current_roles.each do |role|
-      letters << " #{role.suffix}" if !role.suffix.blank? && !letters.include?(role.suffix)
+    letters = ''
+    current_personal_roles.each do |pr|
+      if !pr.role.suffix.blank? && !letters.include?(pr.role.suffix)
+        s = pr.suffix
+        letters << " #{pr.suffix}"
+      end
     end
     letters.strip
   end
@@ -291,15 +301,15 @@ class Person < ApplicationRecord
   end
 
   def names
-    nameparts = name.split(" ")
+    nameparts = name.split(' ')
     firstname = nameparts.first
-    firstinitial = nameparts.second ? "#{firstname[0,1]}." : ""
-    secondname = nameparts.third ? nameparts.second : ""
-    secondinitial = nameparts.third ? "#{secondname[0,1]}." : ""
+    firstinitial = nameparts.second ? "#{firstname[0,1]}." : ''
+    secondname = nameparts.third ? nameparts.second : ''
+    secondinitial = nameparts.third ? "#{secondname[0,1]}." : ''
     middlenames = nameparts.length > 2 ? nameparts.from(1).to(nameparts.from(1).length - 2) : []
-    middleinitials = ""
+    middleinitials = ''
     middlenames.each_with_index do |name, index|
-      middleinitials << " " if index > 0
+      middleinitials << ' ' if index > 0
       middleinitials << "#{name.to_s[0,1]}."
     end
     lastname = nameparts.last
@@ -333,14 +343,14 @@ class Person < ApplicationRecord
 
   def father
     relationships.each do |relationship|
-      return relationship.related_person if (relationship.role.role_type=="child") && relationship.related_person!=nil && relationship.related_person.male?
+      return relationship.related_person if (relationship.role.role_type=='child') && relationship.related_person!=nil && relationship.related_person.male?
     end
     nil
   end
 
   def mother
     relationships.each do |relationship|
-      return relationship.related_person if (relationship.role.role_type=="child") && relationship.related_person!=nil && relationship.related_person.female?
+      return relationship.related_person if (relationship.role.role_type=='child') && relationship.related_person!=nil && relationship.related_person.female?
     end
     nil
   end
@@ -348,7 +358,7 @@ class Person < ApplicationRecord
   def children
     issue = []
     relationships.each do |relationship|
-      issue << relationship.related_person if relationship.role.role_type=="parent"
+      issue << relationship.related_person if relationship.role.role_type=='parent'
     end
     issue.sort! { |a,b| a.born_on ? a.born_on : 0 <=> b.born_on ? b.born_on : 0 }
   end
@@ -371,7 +381,7 @@ class Person < ApplicationRecord
   def spouses
     people = []
     relationships.each do |relationship|
-      people << relationship.related_person if relationship.role.role_type == "spouse"
+      people << relationship.related_person if relationship.role.role_type == 'spouse'
     end
     people #.sort! { |a,b| a.born_on ? a.born_on : 0 <=> b.born_on ? b.born_on : 0 }
   end
@@ -379,7 +389,7 @@ class Person < ApplicationRecord
   def spousal_relationships
     spousal_relationships = []
     relationships.each do |relationship|
-      spousal_relationships << relationship if relationship.role.role_type == "spouse"
+      spousal_relationships << relationship if relationship.role.role_type == 'spouse'
     end
     spousal_relationships
   end
@@ -405,17 +415,17 @@ class Person < ApplicationRecord
   end
 
   def creation_word
-    return "from" if thing?
-    return "formed in" if group?
-    return "built in" if place?
-    "born in"
+    return 'from' if thing?
+    return 'formed in' if group?
+    return 'built in' if place?
+    'born in'
   end
 
   def destruction_word
-    return "until" if thing?
-    return "ended in" if group?
-    return "closed in" if place?
-    "died in"
+    return 'until' if thing?
+    return 'ended in' if group?
+    return 'closed in' if place?
+    'died in'
   end
 
   def inanimate_object?
@@ -423,58 +433,194 @@ class Person < ApplicationRecord
   end
 
   def personal_pronoun
-    return "it" if inanimate_object?
-    return "he" if male?
-    return "she" if female?
-    "he/she"
+    return 'it' if inanimate_object?
+    'they'
   end
 
   def male?
+    if self.gender == 'u'
+      self.gender = 'm' if
+      [
+        'Abel', 'Abraham',
+        'Adam', 'Adolf', 'Adolphus', 'Adrian',
+        'Alan', 'Albert', 'Albie', 'Alexander', 'Alex', 'Alfredo', 'Alfred', 'Alf', 'Allen', 'Alphonse',
+        'Anatole', 'Angelo', 'Andrew', 'Angus', 'Antoine', 'Antonio', 'Anton',
+        'Archibald', 'Archie', 'Arnold', 'Arthur',
+        'Augustus',
+        'Barry',
+        'Benjamin', 'Ben', 'Benedict', 'Bernard',
+        'Bill',
+        'Bob', 'Boris',
+        'Brian', 'Bryan',
+        'Carlo', 'Carl', 'Caspar', 'Casper',
+        'Charles', 'Christian', 'Christopher',
+        'Ciaran',
+        'Claude',
+        'Colin',
+        'Cuthbert',
+        'Cyril',
+        'Daniel', 'Dan', 'Danny', 'David', 'Davey',
+        'Dennis',
+        'Dick',
+        'Dominic',
+        'Donald',
+        'Duncan',
+        'Edgar', 'Edmund', 'Edmond', 'Edmund', 'Edward', 'Edwarde', 'Edwardo', 'Edwin',
+        'Elias', 'Elijah', 'Elliott',
+        'Eric', 'Ernest', 'Ernesto',
+        'Felice', 'Felix',
+        'Filippo',
+        'Francesco', 'Francisco', 'Francis', 'Frank', 'Fraser', 'Frederic', 'Frederick', 'Fred',
+        'Gaetano', 'Gary', 'Gavin',
+        'George', 'Georges', 'Gerard',
+        'Giacomo', 'Giovanni', 'Gilbert', 'Giulio',
+        'Gus',
+        'Harold', 'Harry',
+        'Henri', 'Henry', 'Henryk', 'Herbert', 'Herman',
+        'Horace', 'Howard',
+        'Hugh', 'Humphrey',
+        'Isaac',
+        'Ivan',
+        'Jack', 'Jacob', 'Jacques', 'James',
+        'Jean-Paul', 'Jeremy',
+        'Jimmy', 'Jim',
+        'John', 'Johnny', 'Jon', 'Jonas', 'Josiah', 'Joseph',
+        'Karl',
+        'Kenneth', 'Ken',
+        'Laurent', 'Lawrence',
+        'Len', 'Leonard', 'Leopold', 'Leo', 'Lewis',
+        'Lorenzo', 'Louis',
+        'Luciano', 'Luigi',
+        'Marcel', 'Marco', 'Maurice', 'Martin', 'Matthew', 'Matt', 'Matthias',
+        'Michael', 'Michel', 'Mick',
+        'Montague', 'Montgomery',
+        'Murray',
+        'Nathan',
+        'Neil',
+        'Noah', 'Norman',
+        'Nicholas', 'Nick', 'Nicolas',
+        'Owen',
+        'Patrick', 'Paul',
+        'Pedro', 'Percy', 'Peter', 'Petr',
+        'Philip', 'Philippe',
+        'Pierre', 'Pietro',
+        'Raffaello', 'Ralph', 'Raymond', 'Ray',
+        'Rees', 'Reginald', 'Reg', 'Reggie',
+        'Richard',
+        'Robert', 'Roberto', 'Rod', 'Roger', 'Roland', 'Rory', 'Ross', 'Rowland', 'Roy',
+        'Russell', 'Russ',
+        'Samuel',
+        'Sebastian',
+        'Sergey',
+        'Sidney', 'Sid', 'Simon',
+        'Solomon',
+        'Spencer',
+        'Stanley', 'Stephen', 'Steve', 'Steven', 'Stewart',
+        'Stuart',
+        'Terry',
+        'Theodorus', 'Theo', 'Thomas',
+        'Tommy', 'Tom',
+        'Ugo',
+        'Vincent', 'Vince', 'Vincenzo',
+        'Waldo', 'Walter',
+        'Wilfred', 'Wilf', 'William', 'Will', 'Willie',
+        'Zachariah', 'Zachary', 'Zach',
+      ].include?(name.split(' ').first)
+    end
     !self.female?
   end
 
   def female?
     if self.gender == 'u'
       self.gender = 'f' if roles.any?{|role| role.female?}
-      self.gender = 'f' if self.name.start_with?(
-      "Abigail","Adelaide","Adele","Ada","Agnes","Alice","Alison","Amalie","Amelia","Anastasia","Anna","Anne","Annie","Antoinette",
-      "Beatriz","Bertha","Betty",
-      "Caroline","Cäcilie","Charlotte","Clara","Constance",
-      "Daisy","Deborah","Diana","Dolly","Doris","Dorothea","Dorothy",
-      "Edith","Elfriede","Elisabeth","Elise","Elizabeth","Ella","Ellen","Elly","Elsbeth","Elsa","Else","Emilie","Emily","Emma","Erika","Erna","Ernestine","Eva",
-      "Fanny","Flora","Florence","Franziska","Frida","Frieda",
-      "Georgia","Georgina","Gerda","Gertrud","Gladys","Grace","Greta","Grete",
-      "Hanna","Hattie","Hazel","Helen","Helene","Henrietta","Henriette","Herta","Hertha","Hilde","Hildegard",
-      "Ida","Ilse","Irene","Irma",
-      "Jane","Janet","Jacqueline","Jeanne","Jenny","Jennifer","Johanna","Josephine","Judith","Julia","Julie",
-      "Kate","Käte","Käthe","Kathleen","Klara",
-      "Laura","Letitia","Lidia","Lina","Liz","Lotte","Louise","Louisa","Lucie","Lucy","Luise",
-      "Mabel","Mala","Margaret","Margery","Margot","Maria","Marianne","Marie","Martha","Mary","Mathilde","May","Mercy","Meta","Minna","Monica","Monika",
-      "Nancy, Nelly",
-      "Olga",
-      "Paloma","Paula","Pauline","Peggy","Priscilla",
-      "Rachel","Regina","Roberta","Rosa","Rose","Ruth",
-      "Sally","Sarah","Sara","Selma","Shelley","Sophie","Susan","Susanna",
-      "Toni","Therese",
-      "Ursula",
-      "Vera","Victoria","Violet","Virginia",
-      "Wilhelmina","Winifred")
-      self.gender = 'm' if self.name.start_with?("Reginald")
+      self.gender = 'f' if
+      [
+        'Abigail',
+        'Adelaide', 'Adele', 'Ada',
+        'Agnes',
+        'Alessandra', 'Alexandra', 'Alice', 'Alison',
+        'Amalie', 'Amelia',
+        'Anastasia', 'Ann', 'Anna', 'Anne', 'Annie', 'Antoinette',
+        'Beatriz',
+        'Bertha',
+        'Betsy', 'Betsey', 'Betty',
+        'Brenda',
+        'Caroline', 'Cäcilie',
+        'Charlotte',
+        'Clara',
+        'Constance',
+        'Daisy',
+        'Deborah',
+        'Diana',
+        'Dolly', 'Doris', 'Dorothea', 'Dorothy',
+        'Edith',
+        'Elaine', 'Elfriede', 'Elisabeth', 'Elise', 'Elizabeth', 'Ella', 'Ellen', 'Elly', 'Elsbeth', 'Elsa', 'Else', 'Elsie',
+        'Emilie', 'Emily', 'Emma',
+        'Erika', 'Erna', 'Ernestine',
+        'Eva',
+        'Fanny',
+        'Flora', 'Florence',
+        'Franziska', 'Frida', 'Frieda',
+        'Georgia', 'Georgina', 'Gerda', 'Gertrud', 'Gertrude',
+        'Gladys',
+        'Grace', 'Greta', 'Grete',
+        'Hanna', 'Hattie', 'Hazel',
+        'Helen', 'Helene', 'Henrietta', 'Henriette', 'Herta', 'Hertha',
+        'Hilde', 'Hildegard',
+        'Ida',
+        'Ilse', 'Irene', 'Irma',
+        'Jane', 'Janet', 'Jacqueline',
+        'Jeanne', 'Jenny', 'Jennifer',
+        'Johanna', 'Josephine',
+        'Judith', 'Julia', 'Julie',
+        'Kate', 'Käte', 'Käthe', 'Katherine', 'Kathleen',
+        'Klara',
+        'Laura',
+        'Letitia',
+        'Lidia', 'Lina', 'Liz',
+        'Lotte', 'Louise', 'Louisa',
+        'Lucie', 'Lucy', 'Luise',
+        'Mabel', 'Mala', 'Margaret', 'Margery', 'Margot', 'Maria', 'Marianne', 'Marie', 'Martha', 'Mary', 'Maryse', 'Mathilde', 'May',
+        'Mercy', 'Meta',
+        'Minna', 'Minnie',
+        'Monica', 'Monika',
+        'Nancy',
+        'Nelly', 'Nellie',
+        'Olga',
+        'Paloma', 'Paula', 'Pauline',
+        'Peggy',
+        'Phoebe',
+        'Priscilla',
+        'Rachel',
+        'Regina',
+        'Roberta', 'Rosa', 'Rose', 'Rosemary',
+        'Ruth',
+        'Sally', 'Sarah', 'Sara',
+        'Selma',
+        'Shelley',
+        'Sonia', 'Sophie',
+        'Susan','Susanna',
+        'Toni', 'Therese',
+        'Ursula',
+        'Vera',
+        'Victoria', 'Violet', 'Virginia',
+        'Wilhelmina', 'Winifred'
+      ].include?(name.split(' ').first)
     end
     self.gender == 'f'
   end
 
   def sex
-    return "female" if female?
-    return "object" if inanimate_object?
-    "male"
+    return 'female' if female?
+    return 'object' if inanimate_object?
+    'male'
   end
 
   def possessive
-    return "its" if inanimate_object?
-    return "her" if self.female?
-    return "his" if self.male?
-    "his/her"
+    return 'its' if inanimate_object?
+    return 'her' if self.female?
+    return 'his' if self.male?
+    'his/her'
   end
 
   def is_related_to?(person)
@@ -490,6 +636,38 @@ class Person < ApplicationRecord
 
   def ancestry_url
     "http://www.ancestry.co.uk/genealogy/records/#{self.ancestry_id}" if ancestry_id && !ancestry_id&.blank?
+  end
+
+  def self.search(term)
+    cap = 20 # to protect from stupid searches like "%a%"
+    matches = []
+    name = term
+    name_and_dates = term.match /(.*) \((\d\d\d\d)\s*-*\s*(\d\d\d\d)\)/
+    if name_and_dates
+      name = name_and_dates[1]
+      born = name_and_dates[2]
+      died = name_and_dates[3]
+    end
+    @people = []
+    unaccented_phrase = name.tr("’ßÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčÐðĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĸĹĺĻļĽľĿŀŁłÑñŃńŅņŇňŉŊŋÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšſŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽž",
+"'sAAAAAAaaaaaaAaAaAaCcCcCcCcCcDdDdDdEEEEeeeeEeEeEeEeEeGgGgGgGgHhHhIIIIiiiiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnNnnNnOOOOOOooooooOoOoOoRrRrRrSsSsSsSssTtTtTtUUUUuuuuUuUuUuUuUuUuWwYyyYyYZzZzZz")
+    full_phrase_like = "%#{name}%"
+    phrase_like = "%#{name.tr(" ","%").tr(".","%")}%"
+    unaccented_phrase_like = "%#{unaccented_phrase.tr(" ","%").tr(".","%")}%"
+    @people += Person.where(["name ILIKE ?", full_phrase_like]).limit(cap)
+    @people += Person.where(["name ILIKE ?", phrase_like]).limit(cap)
+    @people += Person.where(["name ILIKE ?", unaccented_phrase_like]).limit(cap) if name.match(/[À-ž]/)
+    @people += Person.where(["array_to_string(aka, ' ') ILIKE ?", full_phrase_like]).limit(cap)
+    @people += Person.where(["array_to_string(aka, ' ') ILIKE ?", phrase_like]).limit(cap)
+    @people += Person.where(["array_to_string(aka, ' ') ILIKE ?", unaccented_phrase_like]).limit(cap) if name.match(/[À-ž]/)
+    @people.uniq!
+    if name_and_dates
+      exact_matches = @people.find_all {|person| person.born_in.to_i == born.to_i && person.died_in.to_i == died.to_i}
+      exact_matches == nil ? matches = exact_matches : matches = @people
+    else
+      matches = @people
+    end
+    matches
   end
 
   def uri
@@ -548,14 +726,14 @@ class Person < ApplicationRecord
     def update_index
       self.index = self.name[0,1].downcase
       if self.surname_starts_with.blank?
-        self.surname_starts_with = self.name[self.name.rindex(" ") ? self.name.rindex(" ") + 1 : 0,1].downcase
+        self.surname_starts_with = self.name[self.name.rindex(' ') ? self.name.rindex(' ') + 1 : 0,1].downcase
       end
       self.surname_starts_with.downcase!
     end
 
     def unaccented_name
-      name.tr("ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčÐðĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĸĹĺĻļĽľĿŀŁłÑñŃńŅņŇňŉŊŋÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšſŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽž",
-"AAAAAAaaaaaaAaAaAaCcCcCcCcCcDdDdDdEEEEeeeeEeEeEeEeEeGgGgGgGgHhHhIIIIiiiiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnNnnNnOOOOOOooooooOoOoOoRrRrRrSsSsSsSssTtTtTtUUUUuuuuUuUuUuUuUuUuWwYyyYyYZzZzZz")
+      name.tr('ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčÐðĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĸĹĺĻļĽľĿŀŁłÑñŃńŅņŇňŉŊŋÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšſŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽž',
+'AAAAAAaaaaaaAaAaAaCcCcCcCcCcDdDdDdEEEEeeeeEeEeEeEeEeGgGgGgGgHhHhIIIIiiiiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnNnnNnOOOOOOooooooOoOoOoRrRrRrSsSsSsSssTtTtTtUUUUuuuuUuUuUuUuUuUuWwYyyYyYZzZzZz')
     end
 
     def accented_name?
@@ -573,7 +751,7 @@ class Person < ApplicationRecord
       if !self.main_photo && dbpedia_depiction
         begin
           photo = Photo.new(url: dbpedia_depiction, person: self)
-          photo.wikimedia_data
+          photo.populate
           photo.save
         rescue
         end

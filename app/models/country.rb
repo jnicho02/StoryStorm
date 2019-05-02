@@ -1,45 +1,26 @@
 # A top-level region definition as defined by the ISO country codes specification.
 # === Attributes
-# * +name+ - the country's common name (not necessarily its official one).
-# * +areas_count+ - cached count of areas
-# * +plaques_count+ - cached count of plaques
-# * +dbpedia_uri+ - uri to link to DBPedia record
 # * +alpha2+ - 2-letter ISO standard code. Used in URLs.
-# * +created_at+
-# * +updated_at+
+# * +areas_count+ - cached count of areas
 # * +description+ - commentary on how this region commemorates subjects
+# * +latitude+ - location
+# * +longitude+ - location
+# * +name+ - the country's common name (not necessarily its official one).
+# * +plaques_count+ - cached count of plaques
+# * +wikidata_id+ - Q-code to match to Wikidata
 class Country < ApplicationRecord
-
   has_many :areas
   has_many :plaques, through: :areas
-
-  @@latitude = nil
-  @@longitude = nil
-  @@p_count = 0
 
   validates_presence_of :name, :alpha2
   validates_uniqueness_of :name, :alpha2
 
+  @@p_count = 0
+
   include PlaquesHelper
 
-  def find_centre
-    if !geolocated?
-      @mean = find_mean(self.areas)
-      @@latitude = @mean.latitude
-      @@longitude = @mean.longitude
-    end
-  end
-
   def geolocated?
-    return !(@@latitude == nil || @@longitude == nil || @@latitude == 51.475 && @@longitude == 0)
-  end
-
-  def latitude
-    @@latitude
-  end
-
-  def longitude
-    @@longitude
+    !(latitude.nil? || longitude.nil? || latitude == 51.475 && longitude.zero?)
   end
 
   def plaques_count
@@ -48,7 +29,7 @@ class Country < ApplicationRecord
   end
 
   def zoom
-    6
+    self.preferred_zoom_level || 6
   end
 
   def as_json(options={})
@@ -64,7 +45,7 @@ class Country < ApplicationRecord
   end
 
   def uri
-    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.country_path(self, format: :json) if id
+    "http://storystorm.herokuapp.com#{Rails.application.routes.url_helpers.country_path(self, format: :json)}" if id
   end
 
   def to_s
