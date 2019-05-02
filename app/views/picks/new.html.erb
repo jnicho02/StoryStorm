@@ -1,16 +1,33 @@
-<% content_for :page_title, "Pick a plaque" %>
-<div class="panel">
-  <h1>Pick a plaque</h1>
+<% content_for(:page_title) {t '.page_title'} %>
+<% content_for(:title) {t '.page_heading'} %>
 
-  <%= form_for @picks, :url => picks_path do |f| %>
-
-    <p>One of my favourite plaques is #<%= f.text_field :plaque_id, :maxlength => "5" %></p>
-
-    <p>I like it because:<br/><%= f.text_area :description, :rows=>5, :cols=>80 %></p>
-
-    <p>Please say that <%= f.text_field :proposer, :maxlength => "40" %> proposed it.</p>
-
-    <%= f.submit "Add", :class => :button %>
-
-  <% end %>
-</div>
+<%= form_for @picks, url: picks_path do |f| %>
+  <div class="form-group row">
+    <span class="form-control-label col-sm-2">
+      <%= t '.plaque_id' %>
+    </span>
+    <div class="col-sm-2">
+      <%= f.text_field :plaque_id, maxlength: "5", class: 'form-control' %>
+    </div>
+    <div class="col-sm-4">
+      <!-- display plaque tile -->
+    </div>
+  </div>
+  <div class="form-group row">
+    <span class="form-control-label col-sm-2">
+      <%= t '.description' %>
+    </span>
+    <div class="col-sm-10">
+      <%= f.text_area :description, :rows=>5, :cols=>80, class: 'form-control' %>
+    </div>
+  </div>
+  <div class="form-group row">
+    <span class="form-control-label col-sm-2">
+    <%= t '.proposer' %>
+    </span>
+    <div class="col-sm-10">
+      <%= f.text_field :proposer, maxlength: "40", class: 'form-control' %>
+    </div>
+  </div>
+  <%= f.submit t('buttons.save'), class: 'btn btn-primary' %>
+<% end %>

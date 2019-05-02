@@ -1,14 +1,14 @@
-<% content_for :page_title, "Photos" %>
+<% content_for(:page_title) {t '.page_title'} %>
+<% content_for(:title) {t '.page_heading'} %>
+<% content_for(:page_subhead) {t '.explanation_html'} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.add'), new_photo_path} %>
 
-<div class="panel">
-  <h1>Photos</h1>
-  <p>To identify the location, inscription, <%= link_to "colour", colours_path %>
-  and <%= link_to "organisation", organisations_path %> of a plaque Open Plaques collates data
-  from <a href="http://flickr.com/">Flickr</a>, Geograph, or Wikimedia Commons images. Read the page on how to contribute for details.</p>
-  <%= will_paginate @plaques %>
-  <%= render partial: 'photos/tile', :collection => @photos, as: :photo %>
-  <br style="clear: left;"/>
-  <%= will_paginate @plaques %>
+<%= will_paginate @photos %>
+<div class="card-columns">
+  <% @photos.each do |photo| %>
+    <%= link_to photo do %>
+      <%= render photo %>
+    <% end %>
+  <% end %>
 </div>
-
-<p class="alternate_formats">Data about photos as <%= alternate_link_to "JSON", photos_path(:json), :json %></p>
+<%= will_paginate @photos %>

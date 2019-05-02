@@ -5,10 +5,10 @@ class RolesByIndexController < ApplicationController
     unless @index =~ /[a-z]/
       raise ActiveRecord::RecordNotFound and return
     end
-    @roles = Role.where(index: @index).by_popularity
+    @roles = Role.where(index: @index).order("personal_roles_count DESC nulls last")
     respond_to do |format|
-      format.html
-      format.json { render :json => @roles }
+      format.html { render "roles/by_index/show" }
+      format.json { render json: @roles }
     end
   end
 

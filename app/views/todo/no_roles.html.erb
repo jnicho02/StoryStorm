@@ -1,20 +1,13 @@
 ﻿<% content_for :page_title, "To do: people with no role" %>
+<% content_for :title, "Subjects with no role" %>
+<% content_for(:admin_menu) {navbar_link_to("All to-do lists", "/todo")} %>
 
-<div class="panel">
-  <h1>Subjects with no role</h1>
-  <section class="admin_panel"><%= link_to("All to-do lists", "/todo") %></section>
-  <% if @people.size > 0 %>
-    <%= will_paginate @people %>
-    <ul>
-      <% @people.each do |person| %>
-        <li><%= dated_person(person) %> <%= link_to "Add role", edit_person_path(person) %>
-          <% person.plaques.each do |plaque| %>
-            <br />"<%= plaque.inscription %>"
-          <% end %>
-        </li>
-      <% end %>
-    </ul>
-  <% else %>
-    <p>Every person has a role. Bravo!</p>
-  <% end %>
-</div>
+<% if @people.size > 0 %>
+  <%= will_paginate @people %>
+  <div class="card-columns">
+    <%= render @people %>
+  </div>
+  <%= will_paginate @people %>
+<% else %>
+  <p>Every person has a role. Bravo!</p>
+<% end %>

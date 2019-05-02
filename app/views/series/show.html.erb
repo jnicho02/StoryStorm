@@ -1,9 +1,12 @@
-<% content_for :page_title, "Plaque series " + @series.name %>
-<div class="panel">
-  <h1>Plaque series <%= @series.name %></h1>
+<% content_for(:page_title) {t '.page_title', series: @series.name } %>
+<% content_for(:title) {@series.name} %>
+<% content_for(:page_subhead) do %>
   <p><%= @series.description %></p>
-  <div id="plaque-map" data-latitude="<%= @mean.latitude %>" data-longitude="<%= @mean.longitude %>" data-view="all" context="<%= request.path %>"></div>
-  <%= will_paginate @plaques %>
-  <%= render @plaques %>
-  <%= will_paginate @plaques %>
-</div>
+  <span class="label label-default label-pill pull-right"><%= @series.plaques_count %></span>
+<% end %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.edit'), edit_series_path(@series)} %>
+
+<% if @series.geolocated? %>
+  <div class="row" id="plaque-map" data-latitude="<%= @series.latitude %>" data-longitude="<%= @series.longitude %>" data-view="all" context="<%= request.path %>"></div>
+<% end %>
+<%= render partial: 'plaques/tabbed' %>

@@ -1,39 +1,40 @@
-<%# The "base" layout contains boilerplate common to *all* views. %>
-
-<!DOCTYPE html>
+<!doctype html>
 <!--[if lt IE 7]><html class="ie ie6"><![endif]-->
 <!--[if IE 7]><html class="ie ie7"><![endif]-->
 <!--[if IE 8]><html class="ie ie8"><![endif]-->
 <!--[if IE 9]><html class="ie ie9"><![endif]-->
 <!--[if gt IE 9]><html class="ie"><![endif]-->
-<!--[if !IE]><!--><html><!--<![endif]-->
+<!--[if !IE]><!--><html lang="en-GB"><!--<![endif]-->
   <head>
-    <!-- RailsStarter <%= Rails.application.config.version %> (<%= l(Rails.application.config.version_date) %>) -->
-
-    <%# CSS should go closest to the top of the document as possible. %>
-    <%= stylesheet_link_tag("application", "data-turbolinks-track" => true) %>
-
-    <%# JavaScript must be in head for Turbolinks to work. %>
-    <%= javascript_include_async_tag("application",
-                                     "data-turbolinks-track" => true) %>
-
     <%= yield(:head) %>
-
-    <meta charset="utf8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <%# Specifies the default name of home screen bookmark in iOS 6+ %>
-    <meta name="apple-mobile-web-app-title" content="RailsStarter">
-
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <%= stylesheet_link_tag 'application' %>
+    <%= javascript_include_tag 'application' %>
+    <%= javascript_include_tag 'https://openlayers.org/dev/OpenLayers.js' if @map %>
+    <%= tag("link", rel: "shortcut icon", href: image_path('openplaques-icon.png'))%>
     <%= csrf_meta_tags %>
-
-    <title>
-      <%= strip_tags(yield(:title)) + " – " if content_for?(:title) %>
-      RailsStarter
-    </title>
+    <% if content_for?(:page_title) %>
+      <title>
+        <%= strip_tags(yield :page_title) %>
+        - Open Plaques
+      </title>
+    <% end %>
+    <%= display_meta_tags site: 'Open Plaques' %>
   </head>
   <body>
-
+    <%= render 'home/development_message' if Rails.env == 'development' %>
     <%= yield %>
-
+    <% if Rails.env == 'production' %>
+      <script>
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+        (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+        })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+        ga('create', 'UA-8901261-1', 'auto');
+        ga('send', 'pageview');
+      </script>
+    <% end %>
   </body>
 </html>

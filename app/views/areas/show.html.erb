@@ -1,25 +1,10 @@
-<% content_for :page_title, "Historical plaques in " + @area.name + ", " + @area.country.name %>
-<div class="panel clearfix">
-  <% if current_user && current_user.is_admin? %>
-    <section class="admin_panel">
-      <%= link_to("Edit this area", edit_area_path(@area), {:class => :edit, :title => "Edit this area"})%>
-    </section>
-  <% end %>
-  <%= link_to(@area.country.name, @area.country) if @area.country %>
-  <h1><%= @area.name %></h1>
-  <p>See <%= link_to "unphotographed plaques", area_unphotographed_path(@area) %>
-  <% if current_user && current_user.is_admin? %>
-    or <%= link_to "ungeolocated plaques", area_ungeolocated_path(@area) %>
-  <% end %>
-  </p>
-  <% if @area.latitude %>
-    <div id="plaque-map" data-latitude="<%= @area.latitude %>" data-longitude="<%= @area.longitude %>" data-view="all"></div>
-  <% end %>
-  <%= will_paginate @plaques %>
-  <%= render @plaques %>
-  <%= will_paginate @plaques %>
-</div>
+<% content_for(:page_title) {t '.page_title', area: @area.name + ", " + @area.country.name} %>
+<% content_for(:title) {@area.name} %>
+<% content_for(:page_subhead) {t '.page_subhead', latlon: "#{@area.latitude},#{@area.longitude}"} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.edit'), edit_area_path(@area)} %>
 
-<div class="panel clearfix">
-  <p class="alternate_formats">Data about <%= @area %> as <%= alternate_link_to "JSON", area_path(@area, :json), :json %></p>
+<h2>Has <%= @area.plaques_count %>+ <%= link_to 'plaques', area_plaques_path(@area) %></h2>
+<h2>About <%= pluralize(@area.people.count, 'subject') %></h2>
+<div class="card-columns">
+  <%= render @area.people %>
 </div>

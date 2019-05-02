@@ -1,36 +1,42 @@
-# This class represents a role ascribed to a person. These can be professions (eg 'doctor'), occupations ('artist'), or activities ('inventor').
-#
+# A role ascribed to a subject.
+# These can be professions (eg 'doctor'), occupations ('artist'), or activities ('inventor').
 # === Attributes
-# * +name+ - The name of the role.
-# * +role_type+ - The classification of the role (see self.types for choice)
-# * +wikipedia_stub+ - url of a relevant Wikipedia page
-# * +index+ - letter indexed on
 # * +abbreviation+ - acronym etc. when a role is commonly abbreviated, especially awards, e.g. Victoria Cross == VC
-#
-# === Associations
-# * +personal_roles+ - how people are connected to this role
-# * +people+ - The people who have been ascribed this role.
-class Role < ActiveRecord::Base
-
-  before_validation :make_slug_not_war
-  before_save :update_index, :filter_name
-  validates_presence_of :name, :slug
-  validates_uniqueness_of :name, :slug
-#  validates_format_of :slug, :with => /^[a-z\_]+$/, :message => "can only contain lowercase letters and underscores"
+# * +created_at+
+# * +description+
+# * +index+ - letter indexed on
+# * +name+ - what the role is called
+# * +personal_roles_count+ - number of people with this role
+# * +prefix+ - word(s) to display as part of a title in a name
+# * +priority+ -
+# * +role_type+ - The classification of the role (see self.types for choice)
+# * +slug+ -
+# * +suffix+ - word(s) to display as part of letters after a name
+# * +updated_at+
+# * +wikidata_id+ - calculated Qnnnnn code, set to 'Q' if not found
+class Role < ApplicationRecord
 
   has_many :personal_roles, -> { order('started_at') }
-  has_many :people, -> { order('name') }, :through => :personal_roles
+  has_many :people, -> { order("name") }, through: :personal_roles
 
+  before_validation :make_slug_not_war
+  before_save :update_index
+  before_save :filter_name
+  before_save :fill_wikidata_id
+  validates_presence_of :name, :slug
+  validates_uniqueness_of :name, :slug
   scope :by_popularity, -> { order("personal_roles_count DESC nulls last") }
   scope :alphabetically, -> { order("name ASC nulls last") }
+  scope :name_starts_with, lambda {|term| where(["lower(name) LIKE ?", term.downcase + "%"]) }
+  scope :name_contains, lambda {|term| where(["lower(name) LIKE ?", "%" + term.downcase + "%"]) }
 
   include ApplicationHelper
 
   def related_roles
-    Role.where(['lower(name) != ? and (lower(name) LIKE ? or lower(name) LIKE ? or lower(name) LIKE ? )', name.downcase, 
+    Role.where(['lower(name) != ? and (lower(name) LIKE ? or lower(name) LIKE ? or lower(name) LIKE ? )', name.downcase,
     "#{name.downcase} %", "% #{name.downcase} %", "% #{name.downcase}"])
   end
-  
+
   def self.types
     ["person", "man", "woman", "animal", "thing", "group", "place", "relationship", "parent", "spouse", "child", "title", "letters", "military medal", "clergy"]
   end
@@ -59,7 +65,19 @@ class Role < ActiveRecord::Base
     return true if "place" == role_type
     return false
   end
-  
+
+  def family?
+    return true if role_type == "parent"
+    return true if role_type == "child"
+    return true if role_type == "spouse"
+    # redundant roles
+    return true if name == "brother"
+    return true if name == "sister"
+    return true if name == "half-brother"
+    return true if name == "half-sister"
+    false
+  end
+
   def type
 	  return "person" if person?
 	  return "animal" if animal?
@@ -68,56 +86,71 @@ class Role < ActiveRecord::Base
 	  return "place" if place?
 	  return "?"
   end
-  
-  # work it out from the name unless override value stored in the db
-  def wikipedia_stub
-    self[:wikipedia_stub] ? self[:wikipedia_stub] : self.name.capitalize.strip.gsub(/ /,"_")
+
+  def fill_wikidata_id
+    unless wikidata_id&.match /Q\d*$/
+      self.wikidata_id = Wikidata.qcode(name)
+      dbpedia_abstract
+    end
+    if wikidata_id&.match(/Q\d*$/) && description.blank?
+      dbpedia_abstract
+    end
   end
-  
-  def dbpedia_url
-    "http://dbpedia.org/resource/" + wikipedia_stub
+
+  def wikidata_url
+    "https://www.wikidata.org/wiki/#{wikidata_id}" if wikidata_id && !wikidata_id&.blank? && wikidata_id != "Q"
   end
-  
+
   def wikipedia_url
-    "http://en.wikipedia.org/wiki/" + wikipedia_stub
+    Wikidata.new(wikidata_id).en_wikipedia_url
   end
-  
+
+  def dbpedia_uri
+    wikipedia_url&.gsub("en.wikipedia.org/wiki","dbpedia.org/resource")&.gsub("https","http")
+  end
+
+  def dbpedia_abstract
+    return description if !description.blank?
+    return nil if dbpedia_uri.blank?
+    api = "#{dbpedia_uri.gsub("resource","data")}.json"
+    begin
+      response = open(api)
+      resp = response.read
+      parsed_json = JSON.parse(resp)
+      self.description = parsed_json["#{dbpedia_uri}"]['http://dbpedia.org/ontology/abstract'].find {|abstract| abstract['lang']=='en'}['value']
+    rescue
+    end
+  end
+
   def relationship?
     return true if "relationship" == role_type
     return true if "parent" == role_type
     return true if "spouse" == role_type
     return true if "child" == role_type
     return true if "group" == role_type
-    return false
+    false
   end
-  
+
   def used_as_a_prefix?
-    return true if "title" == role_type
-    return true if "clergy" == role_type
-    return false
+    !prefix.blank?
   end
-  
+
   def military_medal?
-    return true if "military medal" == role_type
-    return false
+    "military medal" == role_type
   end
 
   def used_as_a_suffix?
-    return true if "letters" == role_type
-    return true if military_medal?
-    return false
+    !suffix.blank?
   end
 
   def letters
-    return abbreviation if used_as_a_suffix?
-    ""
+    used_as_a_suffix? ? suffix : ""
   end
-  
+
   def abbreviated?
-    return false if abbreviation.blank?
-    return true
+    !abbreviation.blank?
   end
-  
+
   def confers_honourific_title?
     return true if "Baronet" == name
     return true if "Baroness" == name
@@ -159,7 +192,7 @@ class Role < ActiveRecord::Base
   def male?
     !self.female?
   end
-  
+
   def full_name
     return abbreviation + " - " + name if abbreviated?
     name
@@ -168,9 +201,19 @@ class Role < ActiveRecord::Base
   def display_name
     abbreviated? ? abbreviation : name
   end
-  
+
+  def sticky?
+    name == "President of the Royal Society" || prefix == "King" || prefix == "Queen"
+  end
+
+  def pluralize
+    full_name.include?(" of ") ?
+      name.split(/#| of /).first.pluralize + name.sub(/.*? of /, ' of ')
+      : name.pluralize
+  end
+
   def uri
-    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.role_path(self.slug, :format => :json)
+    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.role_path(self.slug, format: :json)
   end
 
   def to_s
@@ -179,17 +222,10 @@ class Role < ActiveRecord::Base
 
   def as_json(options={})
     options = {
-      :only => [:name, :personal_roles_count, :role_type, :abbreviation],
-      :include => 
-        { :people=> 
-          {
-            :only => [], 
-            :methods => [:full_name, :uri]
-          }
-        },
-      :methods => [:type, :full_name, :male?, :relationship?, :confers_honourific_title?]
-    } if !options[:prefixes].blank?
-    super(options)
+      only: [:name, :personal_roles_count, :role_type, :abbreviation],
+      methods: [:type, :full_name, :male?, :relationship?, :confers_honourific_title?]
+    } if !options || !options[:only]
+    super options
   end
 
   private

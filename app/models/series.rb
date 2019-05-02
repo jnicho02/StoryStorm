@@ -1,19 +1,21 @@
-# This class represents a series of commemorative plaques often to commemorate an event such as a town's anniversary. 
-# A Series is usually marked on the plaque itself
-#
+# A series of commemorative plaques
+# This is often marked on the plaque itself
 # === Attributes
 # * +name+ - The name of the series (as it appears on the plaques).
 # * +description+ - A description of when amd why a series was erected.
-#
-# === Associations
-# * Plaques - plaques in this series.
-class Series < ActiveRecord::Base
+# * +created_at+
+# * +updated_at+
+# * +plaques_count+
+# * +latitude+
+# * +longitude+
+class Series < ApplicationRecord
 
-  validates_presence_of :name
   has_many :plaques
-  default_scope { order('name ASC') }
 
   attr_accessor :latitude, :longitude
+
+  validates_presence_of :name
+  default_scope { order('name ASC') }
 
   include PlaquesHelper
 
@@ -30,30 +32,21 @@ class Series < ActiveRecord::Base
   end
 
   def uri
-    "http://storystorm.herokuapp.com" + Rails.application.routes.url_helpers.series_path(self.id, :format=>:json) if id
+    'http://storystorm.herokuapp.com' + Rails.application.routes.url_helpers.series_path(self.id, :format=>:json) if id
   end
 
   def as_json(options={})
-  	self.find_centre
-  	if options.size == 0
-      options = 
-      {
-        :only => [:name, :description],
-        :methods => :uri
-      }
-    end
-
-    # use a geojson format wrapper
+    options =
     {
-      type: 'Feature',
-      geometry: 
-      {
-        type: 'Point',
-        coordinates: [self.longitude, self.latitude]
-      },
-      properties: 
-        super(options)
-    }
+      only: [:name, :description, :plaques_count],
+      methods: :uri
+    } if !options[:only]
+    super(options)
+  end
+
+  def main_photo
+    random_photographed_plaque = plaques.photographed.order("random()").limit(1).first
+    random_photographed_plaque ? random_photographed_plaque.main_photo : nil
   end
 
 end

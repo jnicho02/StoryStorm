@@ -1,24 +1,13 @@
-<% content_for :page_title, "Historical plaques in " + @country.name %>
+<% content_for(:page_title) {t '.page_title', country: @country.name} %>
+<% content_for(:title) {render @country} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.edit'), edit_country_path(@country)} %>
+<% content_for(:admin_menu) {navbar_link_to t('buttons.add'), new_country_area_path(@country.alpha2)} %>
 
-<div class="panel clearfix">
-  <% if current_user && current_user.is_admin? %>
-    <section class="admin_panel">
-      <%= link_to("Add a new area", new_country_area_path(@country.alpha2), {:class => :edit, :title => "Add new area to " + @country.name})%>
-    </section>
+<% @areas.sort { |a,b| a.state.to_s <=> b.state.to_s }.group_by(&:state).each do |state, areas| %>
+  <% if !state.blank? %>
+    <h2>Region: <%= state %></h2>
   <% end %>
-
-  <h1><%= @country.name %></h1>
-
-  <h2>We have <%= pluralize @country.plaques.size, "plaque record" %> in <%= pluralize @country.areas.size, "area" %></h2>
-  <%= content_tag("ol", :class => "results one_destination_results", :id => "people_results") do %>
-    <% @areas.each do |area| %>
-      <%= content_tag("li") do %>
-        <%= link_to country_area_path(area.country, area) do %>
-          <p class="result"><%= area.name %></p>
-        <% end %>
-      <% end %>
-    <% end %>
-  <% end unless @areas.size <=0 %>
-
-  <p class="alternate_formats">Data about <%= @country %> as <%= alternate_link_to "XML", country_path(@country, :xml), :xml %> <%= alternate_link_to "JSON", country_path(@country, :json), :json %></p>
-</div>
+  <div class="card-columns">
+    <%= render areas %>
+  </div>
+<% end %>

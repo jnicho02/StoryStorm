@@ -1,42 +1,60 @@
 class SearchController < ApplicationController
 
-  before_filter :set_phrase, :only => [:index, :results]
-
   def index
     @search_results = []
-    if @phrase == nil
-      @phrase = ""
-    end
-    if @phrase != nil && @phrase != ""
-      if @street != nil && @street !=""
-        @search_results = Plaque.find(:all, :joins => :location, :conditions => ["lower(inscription) LIKE ? and lower(locations.name) LIKE ?", "%" + @phrase.downcase + "%", "%" + @street.downcase + "%"], :include => [[:personal_connections => [:person]], [:location => [:area => :country]]])
-      else
-        @search_results = Person.where(["lower(name) LIKE ?", "%" + @phrase.downcase.gsub(" ","%").gsub(".","%") + "%"])
-        @search_results += Plaque.where(["lower(inscription) LIKE ?", "%" + @phrase.downcase + "%"]).includes([[:personal_connections => [:person]], [:location => [:area => :country]]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
-        @search_results += Plaque.where(["lower(inscription_in_english) LIKE ?", "%" + @phrase.downcase + "%"]).includes([[:personal_connections => [:person]], [:location => [:area => :country]]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
+    @original_phrase = params[:phrase]
+    @phrase = @original_phrase
+    @phrase = "" if @phrase == nil
+    @people = []
+    @places = []
+    @plaques = []
+    if @phrase != ""
+      cap = 20 # to protect from stupid searches like "%a%"
+      unaccented_phrase = @phrase.tr("’ßÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčÐðĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĸĹĺĻļĽľĿŀŁłÑñŃńŅņŇňŉŊŋÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšſŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽž",
+"'sAAAAAAaaaaaaAaAaAaCcCcCcCcCcDdDdDdEEEEeeeeEeEeEeEeEeGgGgGgGgHhHhIIIIiiiiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnNnnNnOOOOOOooooooOoOoOoRrRrRrSsSsSsSssTtTtTtUUUUuuuuUuUuUuUuUuUuWwYyyYyYZzZzZz")
+      full_phrase_like = "%#{@phrase}%"
+      phrase_like = "%#{@phrase.tr(" ","%").tr(".","%")}%"
+      unaccented_phrase_like = "%#{unaccented_phrase.tr(" ","%").tr(".","%")}%"
+
+      @people += Person.where(["name ILIKE ?", full_phrase_like]).limit(cap)
+      @people += Person.where(["name ILIKE ?", phrase_like]).limit(cap)
+      @people += Person.where(["name ILIKE ?", unaccented_phrase_like]).limit(cap) if @phrase.match(/[À-ž]/)
+      @people += Person.where(["array_to_string(aka, ' ') ILIKE ?", full_phrase_like]).limit(cap)
+      @people += Person.where(["array_to_string(aka, ' ') ILIKE ?", phrase_like]).limit(cap)
+      @people += Person.where(["array_to_string(aka, ' ') ILIKE ?", unaccented_phrase_like]).limit(cap) if @phrase.match(/[À-ž]/)
+
+      @places += Area.where(["name ILIKE ?", phrase_like]).limit(cap)
+
+      @plaques += Plaque.where(["inscription ILIKE ?", full_phrase_like]).limit(cap).includes([[personal_connections: [:person]], [area: :country]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
+      @plaques += Plaque.where(["inscription ILIKE ?", phrase_like]).limit(cap).includes([[personal_connections: [:person]], [area: :country]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
+      @plaques += Plaque.where(["inscription_in_english ILIKE ?", phrase_like]).limit(cap).includes([[personal_connections: [:person]], [area: :country]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
+      if @phrase.match(/[À-ž]/)
+        @plaques += Plaque.where(["inscription ILIKE ?", unaccented_phrase_like]).limit(cap).includes([[personal_connections: [:person]], [area: :country]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
+        @plaques += Plaque.where(["inscription_in_english ILIKE ?", unaccented_phrase_like]).limit(cap).includes([[personal_connections: [:person]], [area: :country]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
       end
-    elsif  @street != nil && @street !=""
-      @search_results = Plaque.find(:all, :joins => :location, :conditions => ["lower(locations.name) LIKE ?", "%" + @street.downcase + "%"], :include => [[:personal_connections => [:person]], [:location => [:area => :country]]])      
-      @phrase = ""
+      # include all that person's plaques
+      @people.each do |person|
+        @plaques += person.plaques
+      end
+      # Look for their akas in the inscription
+      @people.each do |person|
+        person.aka.each do |aka|
+          @plaques += Plaque.where(["inscription ILIKE ?", "%#{aka}%"]).limit(cap).includes([[personal_connections: [:person]], [area: :country]]).to_a.sort!{|t1,t2|t1.to_s <=> t2.to_s}
+        end
+      end
+      @people.uniq!
+      @places.uniq!
+      @plaques.uniq!
+      @search_results += @people
+      @search_results += @places
+      @search_results += @plaques
     end
+
     respond_to do |format|
       format.html
-      format.kml { render "plaques/index" }
-      format.osm { render "plaques/index" }
-      format.xml # { render :xml => @search_results }
-      format.json { render :json => @search_results }
+      format.json { render json: @search_results.uniq }
+      format.geojson { render geojson: @search_results.uniq }
     end
   end
-
-  def get_search_results(phrase)
-  end
-
-  protected
-
-    def set_phrase
-      @phrase = params[:phrase]
-      @street = params[:street]
-      @street = @street[/([a-zA-Z][a-z A-Z]+)/] unless @street == nil
-    end
 
 end

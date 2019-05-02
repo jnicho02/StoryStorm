@@ -1,61 +1,34 @@
-<% content_for(:page_title) {t('.page_title')} %>
+<% content_for(:page_title) {t '.page_title'} %>
+<% content_for(:title) {t '.strapline_html'} %>
+<% content_for(:page_subhead) {} %>
+<% content_for(:admin_menu) {navbar_link_to(t('.pages'), pages_path, {class: :edit, title: t('.pages')})} %>
 
-<% if Rails.env == 'development' %>
-  <%= render 'development_message' %>
-<% end %>
-
-<div class="panel clearfix">
-  <% if current_user && current_user.is_admin? %>
-    <section class="admin_panel">
-      <%= link_to(t('.pages'), pages_path, {:class => :edit, :title => t('.pages')})%>
-    </section>
-  <% end %>
-  <div id="homepage_content">
-    <p class="intro"><%= t '.strapline_html' %></p>
-    <ul id="homepage_modules">
-      <li>
-        <h2><%=t '.explore' %></h2>
-        <p>Browse the <%= @plaques_count %> plaques by <%= link_to "person", people_path %>, <%= link_to "place", countries_path %>, or <%= link_to "search", search_path %>.</p>
-      </li>
-      <li>
-        <h2><%=t '.contribute' %></h2>
-        <p><%=t '.contribute1' %> <%= link_to t('.add_a_plaque'), new_plaque_path %></p>
-        <p><%=t '.take_a_photo' %></p>
-        <p><%=t '.spot_an_innaccuracy' %></p>
-        <p><%=t '.mission' %></p>
-      </li>
-      <li>
-        <h2><%=t '.news' %></h2>
-        <p><%=t '.news_detail_html' %></p>
-      </li>
-      <% if @todays %>
-        <li id="plaque_of_the_day">
-          <h2><%= t '.plaque_of_the_day' %></h2>
-          <div>
-            <div class="thumb">
-              <%= link_to thumbnail_img(@todays.plaque), @todays.plaque %>
-            </div>
-            <div><%= link_to @todays.plaque.title, @todays.plaque %><br/>"<%= @todays.description %>" - <%= @todays.proposer %></div>
-          </div>
-        </li>
-      <% end %>
-    </ul>
-
+<div class="row">
+  <div class="col-xs-12 col-sm-12 col-md-8">
+    <div class="row">
+      <div class="col-sm-4"><%= render partial: 'explore' %></div>
+      <div class="col-sm-4"><%= render partial: 'open_data' %></div>
+      <div class="col-sm-4"><%= render partial: 'news' %></div>
+    </div>
+    <div class="row">
+      <div class="col-xs-12 col-sm-6"><%= render partial: 'contribute' %></div>
+      <div class="col-xs-12 col-sm-6"><%= render partial: 'plaque_of_the_day' %></div>
+    </div>
   </div>
-
-  <ol id="recent_photographed_plaques">
-  <% @recent_plaques.each do |plaque| %>
-    <% if plaque.photos.first %>
-      <li class="first option_one">
-        <%= link_to plaque_path(plaque) do %>
-          <img src="<%= plaque.photos.first.file_url %>" width="200" alt="Plaque inscription" />
-          <div class="info">
-            <p><%= truncate(plaque.inscription, :length => 150) %></p>
-          </div>
-        <% end %>
-      </li>
+  <div class="col-xs-12 col-sm-6 col-md-4">
+    <% if @famous_women %>
+      <%= render partial: 'international_womens_day' %>
+    <% else %>
+      <%= render partial: 'special_offer' %>
     <% end %>
-  <% end %>
-  </ol>
-
+  </div>
 </div>
+
+<% if @famous_women %>
+  <% @people = @famous_women %>
+  <h2><%= t '.famous_women' %></h2>
+  <%= render partial: 'people/tiles' %>
+<% elsif @plaques %>
+    <h2><%= t '.recently_photographed' %></h2>
+    <%= render partial: 'plaques/tabbed' %>
+<% end %>

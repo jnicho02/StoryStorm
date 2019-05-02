@@ -1,41 +1,60 @@
 class AreaPlaquesController < ApplicationController
 
-  before_filter :find, :only => [:show]
-  respond_to :html, :xml, :json
+  before_action :find, only: [:show]
+  respond_to :html, :json, :csv
 
   def show
-    @display = 'all'
-    if (params[:id] && params[:id]=='unphotographed')
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @area.plaques.unphotographed
-      else
-        @plaques = @area.plaques.unphotographed.paginate(:page => params[:page], :per_page => 50)
-      end
-      @display = 'unphotographed'
-    elsif (params[:id] && params[:id]=='current')
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @area.plaques.current
-      else
-        @plaques = @area.plaques.current.paginate(:page => params[:page], :per_page => 50)
-      end
-    elsif (params[:id] && params[:id]=='ungeolocated')
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @area.plaques.ungeolocated
-      else
-        @plaques = @area.plaques.ungeolocated.paginate(:page => params[:page], :per_page => 50)
-      end
-      @display = 'ungeolocated'
-    else
-      if request.format == 'json' or request.format == 'xml'
-        @plaques = @area.plaques
-      else
-        @plaques = @area.plaques.paginate(:page => params[:page], :per_page => 50)
-      end
+    begin
+      set_meta_tags open_graph: {
+        title: "Open Plaques Area #{@area.name}",
+      }
+      @main_photo = @area.main_photo
+      set_meta_tags twitter: {
+        title: "Open Plaques Area #{@area.name}",
+        image: {
+          _: @main_photo ? @main_photo.file_url : view_context.root_url[0...-1] + view_context.image_path("openplaques.png"),
+          width: 100,
+          height: 100,
+        }
+      }
+    rescue
     end
+    zoom = params[:zoom].to_i
+
+    @display = 'plaques'
+    if zoom > 0
+      @plaques = @area.plaques.tile(zoom, params[:x].to_i, params[:y].to_i, params[:filter])
+    elsif (params[:filter] && params[:filter]!='')
+      begin
+        request.format.html? ?
+          @plaques = @area.plaques.send(params[:filter].to_s).paginate(page: params[:page], per_page: 50)
+          : @plaques = @area.plaques.send(params[:filter].to_s).paginate(page: params[:page], per_page: 5000000)
+        @display = params[:filter].to_s
+      rescue # an unrecognised filter method
+        request.format.html? ?
+          @plaques = @area.plaques.paginate(page: params[:page], per_page: 50)
+          : @plaques = @area.plaques.paginate(page: params[:page], per_page: 5000000)
+        @display = 'all'
+      end
+    else
+      request.format.html? ?
+        @plaques = @area.plaques.paginate(page: params[:page], per_page: 50)
+        : @plaques = @area.plaques.paginate(page: params[:page], per_page: 5000000)
+      @display = 'all'
+    end
+    @area.find_centre if !@area.geolocated?
     respond_with @plaques do |format|
-      format.html
-      format.xml
-      format.json { render :json => @plaques.as_json() }
+      format.html { render "areas/plaques/show" }
+      format.json { render json: @plaques }
+      format.geojson { render geojson: @plaques.geolocated, parent: @area }
+      format.csv {
+        send_data(
+          "\uFEFF#{PlaqueCsv.new(@plaques).build}",
+          type: 'text/csv',
+          filename: "open-plaques-#{@area.slug}-#{Date.today.to_s}.csv",
+          disposition: 'attachment'
+        )
+      }
     end
   end
 

@@ -1,34 +1,42 @@
 class PhotosController < ApplicationController
 
-  before_filter :authenticate_admin!, :only => :destroy
-  before_filter :authenticate_user!, :except => [:index, :show, :update, :create]
-  before_filter :find, :only => [:destroy, :edit, :show, :update]
-  before_filter :get_licences, :only => [:new, :create, :edit]
+  before_action :authenticate_user!, except: [:index, :show, :update, :create]
+  before_action :authenticate_admin!, only: :destroy
+  before_action :find, only: [:destroy, :edit, :show, :update]
+  before_action :get_licences, only: [:new, :create, :edit]
 
   def index
-    @photos = Photo.paginate(:page => params[:page], :per_page => 200)
+    @photos = Photo.order(id: :desc).paginate(page: params[:page], per_page: 200)
     respond_to do |format|
       format.html
-      format.json { render :json => @photos }
+      format.json { render json: @photos }
+      format.geojson { render geojson: @photos.geolocated }
     end
   end
 
   def show
     respond_to do |format|
       format.html
-      format.json { render :json => @photo }
+      format.json { render json: @photo }
+      format.geojson { render geojson: @photo }
     end
   end
 
   def update
+    if (params[:streetview_url] && params[:streetview_url]!='')
+      point = help.geolocation_from params[:streetview_url]
+      if !point.latitude.blank? && !point.longitude.blank?
+        params[:photo][:latitude] = point.latitude
+        params[:photo][:longitude] = point.longitude
+      end
+    end
     respond_to do |format|
       if @photo.update_attributes(photo_params)
         flash[:notice] = 'Photo was successfully updated.'
-        format.html { redirect_to :back }
-        format.xml  { head :ok }
+        format.html { redirect_back(fallback_location: root_path) }
       else
+        flash[:notice] = @photo.errors
         format.html { render "edit" }
-        format.xml  { render :xml => @photo.errors, :status => :unprocessable_entity }
       end
     end
   end
@@ -40,14 +48,28 @@ class PhotosController < ApplicationController
   def create
     @photo = Photo.new(photo_params)
     @photo.wikimedia_data
-    @photo.save
-    redirect_to :back
+    if @photo.errors.empty?
+      @already_existing_photo = Photo.find_by_file_url @photo.file_url
+      if @already_existing_photo
+        @photo = @already_existing_photo
+        @photo.update_attributes(photo_params)
+      end
+      @photo.save ? flash[:notice] = 'Photo was successfully updated.' : flash[:notice] = @photo.errors.full_messages.to_sentence
+    else
+      flash[:notice] = @photo.errors.full_messages.to_sentence
+    end
+    redirect_back(fallback_location: root_path)
+  end
+
+  def edit
+    @plaques = @photo.nearest_plaques
   end
 
   def destroy
     @plaque = @photo.plaque
+    @person = @photo.person
     @photo.destroy
-    redirect_to plaque_path(@plaque)
+    redirect_to @plaque ? plaque_photos_path(@plaque) : @person ? edit_person_path(@person) : photos_path()
   end
 
   protected
@@ -60,19 +82,34 @@ class PhotosController < ApplicationController
       @licences = Licence.order(:name)
     end
 
-  private 
+  private
+
+    def help
+      Helper.instance
+    end
+
+    class Helper
+      include Singleton
+      include PlaquesHelper
+    end
 
   	def photo_params
       params.require(:photo).permit(
-        :shot,
-        :url,
-        :plaque_id,
-        :of_a_plaque,
+        :clone_id,
+        :description,
         :file_url,
+        :latitude,
+        :licence_id,
+        :longitude,
+        :of_a_plaque,
+        :person_id,
         :photographer,
         :photographer_url,
-        :licence_id,
-        :person_id
-      )
-	end
+        :plaque_id,
+        :shot,
+        :streetview_url,
+        :subject,
+        :thumbnail,
+        :url)
+    end
 end

@@ -11,9 +11,14 @@
 // about supported directives.
 //
 //= require jquery
+//= require tether
+//= require popper
+//= require bootstrap
 //= require jquery-ui
 //= require jquery_ujs
 //= require leaflet
+//= require markercluster
+//= require tile.stamen
 //= require RGraph.hbar.js
 //= require RGraph.common.zoom.js
 //= require RGraph.common.tooltips.js
@@ -28,7 +33,7 @@
 
 function addLoadEvent(func) {
   var oldonload = window.onload;
-  if (typeof window.onload != 'function') {
+  if (typeof window.onload !== 'function') {
     window.onload = func;
   } else {
     window.onload = function() {

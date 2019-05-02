@@ -1,10 +1,7 @@
-<% content_for :page_title, "Find Flickr photos for a photographer" %>
-<div class="panel">
-  <h1>Find openplaques machinetagged photos</h1>
+<% content_for(:page_title) {t '.page_title'} %>
+<% content_for(:title) {t '.page_heading' } %>
 
-  <%= form_tag("/photographers", :method => "create") do %>
-    <%= label_tag(:flickr_url, "Flickr photo url:") %>
-    <%= text_field_tag(:flickr_url) %>
-    <%= submit_tag("Search") %>
-  <% end %>
-</div>
+<%= form_tag("/photographers", method: "create") do %>
+  <%= label_tag(:flickr_url, t('.flickr_url')) %> <%= text_field_tag(:flickr_url) %>
+  <%= submit_tag(t('buttons.add'), class: 'btn btn-primary') %>
+<% end %>
